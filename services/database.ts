@@ -10,12 +10,13 @@ class DatabaseService {
 
   private get client(): SupabaseClient {
     if (!this._supabase) {
-      this._supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true
-        }
-      });
+      try {
+        this._supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      } catch (e) {
+        console.error("ZFIT: Falha crítica ao criar cliente Supabase", e);
+        // Retorna um cliente "dummy" ou relança para tratamento no App
+        throw e;
+      }
     }
     return this._supabase;
   }
@@ -29,7 +30,7 @@ class DatabaseService {
       .maybeSingle();
 
     if (error) throw error;
-    if (!user) throw new Error('E-mail não encontrado. Crie uma conta primeiro.');
+    if (!user) throw new Error('E-mail não encontrado.');
 
     localStorage.setItem('zfit_user', JSON.stringify(user));
     localStorage.setItem('zfit_auth', 'true');
@@ -38,15 +39,6 @@ class DatabaseService {
 
   async signUp(name: string, email: string): Promise<User> {
     const emailNormalized = email.toLowerCase().trim();
-    
-    const { data: existing } = await this.client
-      .from('profiles')
-      .select('email')
-      .eq('email', emailNormalized)
-      .maybeSingle();
-
-    if (existing) throw new Error('Este e-mail já está cadastrado.');
-
     const newUser: User = {
       id: crypto.randomUUID(),
       name: name.trim(),
@@ -58,11 +50,8 @@ class DatabaseService {
       plan: 'Free'
     };
 
-    const { error: insertError } = await this.client
-      .from('profiles')
-      .insert(newUser);
-
-    if (insertError) throw insertError;
+    const { error } = await this.client.from('profiles').insert(newUser);
+    if (error) throw error;
 
     localStorage.setItem('zfit_user', JSON.stringify(newUser));
     localStorage.setItem('zfit_auth', 'true');
@@ -80,11 +69,7 @@ class DatabaseService {
     try {
       const user = JSON.parse(saved);
       const { data: profile } = await this.client.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      if (profile) {
-        localStorage.setItem('zfit_user', JSON.stringify(profile));
-        return profile as User;
-      }
-      return user;
+      return (profile as User) || user;
     } catch {
       return null;
     }
@@ -130,19 +115,17 @@ class DatabaseService {
         .from('social_posts')
         .select('*, user:profiles(*)')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(10);
 
       return (data || []).map((p: any) => ({
         ...p,
         workoutTitle: p.workout_title,
-        timestamp: new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: 'Recent',
         likes: p.likes || 0,
         commentsCount: p.comments_count || 0,
         hasLiked: false
       }));
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   }
 
   async publishPost(post: SocialPost): Promise<void> {
@@ -161,33 +144,22 @@ class DatabaseService {
 
   async getDailyStats(): Promise<DailyStats> {
     const user = await this.getCurrentUser();
-    const defaultStats: DailyStats = { caloriesBurned: 0, waterIntake: 0, waterGoal: 3000, workoutProgress: 0 };
-    if (!user) return defaultStats;
-
+    if (!user) return { caloriesBurned: 0, waterIntake: 0, waterGoal: 3000, workoutProgress: 0 };
     const today = new Date().toISOString().split('T')[0];
-    const { data } = await this.client
-      .from('daily_stats')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('date', today)
-      .maybeSingle();
-
-    if (data) {
-      return {
-        caloriesBurned: data.calories_burned || 0,
-        waterIntake: data.water_intake || 0,
-        waterGoal: data.water_goal || 3000,
-        workoutProgress: data.workout_progress || 0
-      };
-    }
-    return defaultStats;
+    const { data } = await this.client.from('daily_stats').select('*').eq('user_id', user.id).eq('date', today).maybeSingle();
+    
+    return data ? {
+      caloriesBurned: data.calories_burned,
+      waterIntake: data.water_intake,
+      waterGoal: data.water_goal,
+      workoutProgress: data.workout_progress
+    } : { caloriesBurned: 0, waterIntake: 0, waterGoal: 3000, workoutProgress: 0 };
   }
 
   async updateDailyStats(stats: DailyStats): Promise<void> {
     const user = await this.getCurrentUser();
     if (!user) return;
     const today = new Date().toISOString().split('T')[0];
-    
     await this.client.from('daily_stats').upsert({
       user_id: user.id,
       date: today,
