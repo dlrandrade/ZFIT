@@ -1,431 +1,1154 @@
-
 import React, { useState, useEffect } from 'react';
-import { 
-  Users, Dumbbell, TrendingUp, Activity, Search, Edit3, Trash2, 
-  ShieldCheck, ArrowUpRight, Database, Calendar, FileText, Plus, 
-  Layout, DollarSign, Ticket, Clock, X, Save, Image as ImageIcon,
-  Check, Loader2
+import {
+  Users,
+  Dumbbell,
+  FileText,
+  BarChart3,
+  TrendingUp,
+  Crown,
+  Zap,
+  Activity,
+  Plus,
+  Trash2,
+  Edit3,
+  Save,
+  X,
+  ChevronRight,
+  Search,
+  Filter,
+  Download,
+  RefreshCw,
+  Eye,
+  Heart,
+  Share2,
+  Calendar,
+  Clock,
+  Target,
+  Award,
+  Loader2,
+  BookOpen,
+  Ticket,
+  Settings,
+  LayoutDashboard,
+  ListChecks,
+  PieChart
 } from 'lucide-react';
-import { Coupon, BlogArticle, Workout, Exercise } from '../types';
-import { MOCK_BLOG, EXERCISE_DATABASE, PUBLIC_ROUTINES } from '../constants';
+import { db } from '../services/database';
+import {
+  User,
+  BlogArticle,
+  ExerciseCatalog,
+  PublicRoutine,
+  AdminStats,
+  LeaderboardEntry,
+  ExerciseStats,
+  Coupon,
+  Exercise,
+  ExerciseSet
+} from '../types';
 
 interface AdminDashboardProps {
   theme: any;
+  onClose: () => void;
 }
 
-type ContentSubTab = 'blog' | 'exercises' | 'routines';
+type TabType = 'overview' | 'users' | 'routines' | 'exercises' | 'blog' | 'coupons' | 'analytics';
 
-const AdminDashboard: React.FC<AdminDashboardProps> = ({ theme }) => {
-  const [activeTab, setActiveTab] = useState<'overview' | 'saas' | 'content'>('overview');
-  const [contentSubTab, setContentSubTab] = useState<ContentSubTab>('blog');
-  
-  // States with LocalStorage Persistence
-  const [coupons, setCoupons] = useState<Coupon[]>(() => {
-    const saved = localStorage.getItem('zfit_admin_coupons');
-    return saved ? JSON.parse(saved) : [
-      { id: '1', code: 'ZFITBLACK', discount: 20, type: 'percentage', expiresAt: '2023-12-31', status: 'active' },
-      { id: '2', code: 'PRIMEIROTREINO', discount: 15, type: 'fixed', expiresAt: '2023-12-01', status: 'expired' }
-    ];
-  });
+const MUSCLE_GROUPS = ['Peito', 'Costas', 'Ombros', 'Bíceps', 'Tríceps', 'Pernas', 'Glúteos', 'Abdômen', 'Cardio'];
+const DIFFICULTIES = ['Iniciante', 'Intermediário', 'Avançado', 'Expert'];
 
-  const [articles, setArticles] = useState<BlogArticle[]>(() => {
-    const saved = localStorage.getItem('zfit_admin_articles');
-    return saved ? JSON.parse(saved) : MOCK_BLOG;
-  });
+const AdminDashboard: React.FC<AdminDashboardProps> = ({ theme, onClose }) => {
+  const [activeTab, setActiveTab] = useState<TabType>('overview');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const [exercises, setExercises] = useState<any[]>(() => {
-    const saved = localStorage.getItem('zfit_admin_exercises');
-    return saved ? JSON.parse(saved) : EXERCISE_DATABASE;
-  });
+  // Data states
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [routines, setRoutines] = useState<PublicRoutine[]>([]);
+  const [exercises, setExercises] = useState<ExerciseCatalog[]>([]);
+  const [articles, setArticles] = useState<BlogArticle[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [exerciseStats, setExerciseStats] = useState<ExerciseStats[]>([]);
+  const [apiUsage, setApiUsage] = useState<{ userId: string; userName: string; calls: number }[]>([]);
 
-  const [routines, setRoutines] = useState<Workout[]>(() => {
-    const saved = localStorage.getItem('zfit_admin_routines');
-    return saved ? JSON.parse(saved) : PUBLIC_ROUTINES;
-  });
+  // Modal states
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState<'routine' | 'exercise' | 'article' | 'coupon' | null>(null);
+  const [editingItem, setEditingItem] = useState<any>(null);
 
-  // Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [modalType, setModalType] = useState<'coupon' | 'blog' | 'exercise' | 'routine' | null>(null);
-  const [editItem, setEditItem] = useState<any>(null);
-  const [selectedExerciseNames, setSelectedExerciseNames] = useState<string[]>([]);
-  
-  // Save Feedback States
-  const [isSaving, setIsSaving] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  // Form states
+  const [formData, setFormData] = useState<any>({});
 
   useEffect(() => {
-    localStorage.setItem('zfit_admin_coupons', JSON.stringify(coupons));
-    localStorage.setItem('zfit_admin_articles', JSON.stringify(articles));
-    localStorage.setItem('zfit_admin_exercises', JSON.stringify(exercises));
-    localStorage.setItem('zfit_admin_routines', JSON.stringify(routines));
-  }, [coupons, articles, exercises, routines]);
+    loadData();
+  }, []);
 
-  const stats = [
-    { label: 'Total Usuários', value: '1,284', change: '+12%', icon: Users },
-    { label: 'Assinantes Pro', value: '312', change: '+18%', icon: DollarSign },
-    { label: 'MRR Estimado', value: 'R$ 9.2k', change: '+22%', icon: TrendingUp },
-    { label: 'Ativos Hoje', value: '452', change: '+5%', icon: Activity },
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [
+        statsData,
+        usersData,
+        routinesData,
+        exercisesData,
+        articlesData,
+        couponsData,
+        leaderboardData,
+        exerciseStatsData,
+        apiUsageData
+      ] = await Promise.all([
+        db.getAdminStats(),
+        db.getAllUsers(),
+        db.getPublicRoutines(),
+        db.getExercisesCatalog(),
+        db.getBlogArticles(),
+        db.getCoupons(),
+        db.getLeaderboard(),
+        db.getExerciseStats(),
+        db.getApiUsageByUser()
+      ]);
+
+      setStats(statsData);
+      setUsers(usersData);
+      setRoutines(routinesData);
+      setExercises(exercisesData);
+      setArticles(articlesData);
+      setCoupons(couponsData);
+      setLeaderboard(leaderboardData);
+      setExerciseStats(exerciseStatsData);
+      setApiUsage(apiUsageData);
+    } catch (error) {
+      console.error('Erro ao carregar dados admin:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openModal = (type: 'routine' | 'exercise' | 'article' | 'coupon', item?: any) => {
+    setModalType(type);
+    setEditingItem(item || null);
+
+    if (item) {
+      setFormData({ ...item });
+    } else {
+      // Default values for new items
+      switch (type) {
+        case 'routine':
+          setFormData({
+            id: `routine-${Date.now()}`,
+            title: '',
+            description: '',
+            muscle_groups: [],
+            difficulty: 'Intermediário',
+            duration_minutes: 60,
+            exercises: [],
+            is_premium: false,
+            views: 0,
+            uses: 0
+          });
+          break;
+        case 'exercise':
+          setFormData({
+            id: `ex-${Date.now()}`,
+            name: '',
+            muscle_group: 'Peito',
+            secondary_muscles: [],
+            equipment: '',
+            difficulty: 'Intermediário',
+            instructions: ''
+          });
+          break;
+        case 'article':
+          setFormData({
+            id: `art-${Date.now()}`,
+            title: '',
+            excerpt: '',
+            content: '',
+            author: 'ZFIT Team',
+            date: new Date().toISOString().split('T')[0],
+            category: 'Treino',
+            image: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=800',
+            views: 0,
+            likes: 0,
+            shares: 0
+          });
+          break;
+        case 'coupon':
+          setFormData({
+            id: `coupon-${Date.now()}`,
+            code: '',
+            discount: 10,
+            type: 'percentage',
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'active'
+          });
+          break;
+      }
+    }
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setModalType(null);
+    setEditingItem(null);
+    setFormData({});
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      switch (modalType) {
+        case 'routine':
+          await db.savePublicRoutine(formData);
+          setRoutines(await db.getPublicRoutines());
+          break;
+        case 'exercise':
+          await db.saveExerciseCatalog(formData);
+          setExercises(await db.getExercisesCatalog());
+          break;
+        case 'article':
+          await db.saveBlogArticle(formData);
+          setArticles(await db.getBlogArticles());
+          break;
+        case 'coupon':
+          await db.saveCoupon(formData);
+          setCoupons(await db.getCoupons());
+          break;
+      }
+      closeModal();
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      alert('Erro ao salvar. Tente novamente.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (type: string, id: string) => {
+    if (!confirm('Tem certeza que deseja excluir?')) return;
+
+    try {
+      switch (type) {
+        case 'routine':
+          await db.deletePublicRoutine(id);
+          setRoutines(routines.filter(r => r.id !== id));
+          break;
+        case 'exercise':
+          await db.deleteExerciseCatalog(id);
+          setExercises(exercises.filter(e => e.id !== id));
+          break;
+        case 'article':
+          await db.deleteBlogArticle(id);
+          setArticles(articles.filter(a => a.id !== id));
+          break;
+        case 'coupon':
+          await db.deleteCoupon(id);
+          setCoupons(coupons.filter(c => c.id !== id));
+          break;
+      }
+    } catch (error) {
+      console.error('Erro ao excluir:', error);
+    }
+  };
+
+  const handleUpdateUserPlan = async (userId: string, plan: 'Free' | 'Pro' | 'Elite') => {
+    await db.updateUserPlan(userId, plan);
+    setUsers(users.map(u => u.id === userId ? { ...u, plan } : u));
+  };
+
+  const handleUpdateUserRole = async (userId: string, role: 'user' | 'admin') => {
+    await db.updateUserRole(userId, role);
+    setUsers(users.map(u => u.id === userId ? { ...u, role } : u));
+  };
+
+  const addExerciseToRoutine = () => {
+    const newExercise: Exercise = {
+      id: `ex-${Date.now()}-${Math.random()}`,
+      name: '',
+      muscleGroup: 'Peito',
+      sets: [{ weight: '20kg', reps: '12', difficulty: 'Normal', color: '#adf94e', completed: false }]
+    };
+    setFormData({
+      ...formData,
+      exercises: [...(formData.exercises || []), newExercise]
+    });
+  };
+
+  const updateExerciseInRoutine = (index: number, field: string, value: any) => {
+    const updatedExercises = [...formData.exercises];
+    updatedExercises[index] = { ...updatedExercises[index], [field]: value };
+    setFormData({ ...formData, exercises: updatedExercises });
+  };
+
+  const removeExerciseFromRoutine = (index: number) => {
+    const updatedExercises = formData.exercises.filter((_: any, i: number) => i !== index);
+    setFormData({ ...formData, exercises: updatedExercises });
+  };
+
+  const tabs: { id: TabType; label: string; icon: React.ReactNode }[] = [
+    { id: 'overview', label: 'Visão Geral', icon: <LayoutDashboard size={18} /> },
+    { id: 'users', label: 'Usuários', icon: <Users size={18} /> },
+    { id: 'routines', label: 'Rotinas', icon: <ListChecks size={18} /> },
+    { id: 'exercises', label: 'Exercícios', icon: <Dumbbell size={18} /> },
+    { id: 'blog', label: 'Blog', icon: <BookOpen size={18} /> },
+    { id: 'coupons', label: 'Cupons', icon: <Ticket size={18} /> },
+    { id: 'analytics', label: 'Analytics', icon: <PieChart size={18} /> }
   ];
 
-  const handleDelete = (id: string, type: string) => {
-    if (!confirm('Tem certeza que deseja excluir?')) return;
-    if (type === 'coupon') setCoupons(coupons.filter(c => c.id !== id));
-    if (type === 'blog') setArticles(articles.filter(a => a.id !== id));
-    if (type === 'exercise') setExercises(exercises.filter((_, i) => i.toString() !== id));
-    if (type === 'routine') setRoutines(routines.filter(r => r.id !== id));
-  };
+  const StatCard = ({ title, value, subtitle, icon, color }: { title: string; value: string | number; subtitle?: string; icon: React.ReactNode; color: string }) => (
+    <div className="rounded-[30px] p-6 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+      <div className="flex justify-between items-start mb-4">
+        <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${color}20`, color }}>
+          {icon}
+        </div>
+      </div>
+      <h3 className="text-3xl font-black tracking-tighter" style={{ color: theme.text }}>{value}</h3>
+      <p className="text-[10px] font-black uppercase tracking-widest opacity-40 mt-1" style={{ color: theme.text }}>{title}</p>
+      {subtitle && <p className="text-[9px] opacity-30 mt-1" style={{ color: theme.text }}>{subtitle}</p>}
+    </div>
+  );
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSaving(true);
-    
-    const formData = new FormData(e.target as HTMLFormElement);
-    const data = Object.fromEntries(formData.entries());
+  const renderOverview = () => (
+    <div className="space-y-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard title="Total Usuários" value={stats?.totalUsers || 0} icon={<Users size={24} />} color="#adf94e" />
+        <StatCard title="Usuários Ativos" value={stats?.activeUsers || 0} subtitle="Últimos 30 dias" icon={<Activity size={24} />} color="#4CAF50" />
+        <StatCard title="Assinantes Pro" value={stats?.proSubscribers || 0} icon={<Zap size={24} />} color="#2196F3" />
+        <StatCard title="Assinantes Elite" value={stats?.eliteSubscribers || 0} icon={<Crown size={24} />} color="#FFD700" />
+      </div>
 
-    // Simulação de processamento para efeito visual
-    await new Promise(resolve => setTimeout(resolve, 800));
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard title="Total Treinos" value={stats?.totalWorkouts || 0} icon={<Dumbbell size={24} />} color="#FF5722" />
+        <StatCard title="Exercícios" value={stats?.totalExercises || 0} icon={<Target size={24} />} color="#9C27B0" />
+        <StatCard title="Rotinas Públicas" value={stats?.totalRoutines || 0} icon={<ListChecks size={24} />} color="#00BCD4" />
+        <StatCard title="Artigos Blog" value={stats?.totalArticles || 0} icon={<FileText size={24} />} color="#E91E63" />
+      </div>
 
-    if (modalType === 'coupon') {
-      const newCoupon: Coupon = {
-        id: editItem?.id || Date.now().toString(),
-        code: (data.code as string).toUpperCase(),
-        discount: parseFloat(data.discount as string),
-        type: data.type as 'percentage' | 'fixed',
-        expiresAt: data.expiresAt as string,
-        status: 'active'
-      };
-      if (editItem) setCoupons(coupons.map(c => c.id === editItem.id ? newCoupon : c));
-      else setCoupons([newCoupon, ...coupons]);
-    }
-
-    if (modalType === 'blog') {
-      const newArticle: BlogArticle = {
-        id: editItem?.id || Date.now().toString(),
-        title: data.title as string,
-        excerpt: data.excerpt as string,
-        content: data.content as string,
-        author: data.author as string,
-        date: new Date().toLocaleDateString('pt-BR'),
-        category: data.category as string,
-        image: data.image as string || 'https://images.unsplash.com/photo-1517836357463-d25dfeac3438?auto=format&fit=crop&q=80&w=800',
-        readTime: '5 min'
-      };
-      if (editItem) setArticles(articles.map(a => a.id === editItem.id ? newArticle : a));
-      else setArticles([newArticle, ...articles]);
-    }
-
-    if (modalType === 'exercise') {
-      const newEx = { name: data.name as string, muscleGroup: data.muscleGroup as string };
-      if (editItem) setExercises(exercises.map((ex, i) => i.toString() === editItem.id ? newEx : ex));
-      else setExercises([newEx, ...exercises]);
-    }
-
-    if (modalType === 'routine') {
-      const routineExercises: Exercise[] = selectedExerciseNames.map((name, i) => {
-        const dbEx = exercises.find(ex => ex.name === name);
-        return {
-          id: `admin-ex-${Date.now()}-${i}`,
-          name: name,
-          muscleGroup: dbEx?.muscleGroup || 'Geral',
-          sets: [{ weight: '10kg', reps: '10', difficulty: 'Normal', color: theme.primary, completed: false }]
-        };
-      });
-
-      const newRoutine: Workout = {
-        id: editItem?.id || `pub-${Date.now()}`,
-        title: data.title as string,
-        muscleGroups: Array.from(new Set(routineExercises.map(e => e.muscleGroup))),
-        exercises: routineExercises,
-        isPublic: true
-      };
-
-      if (editItem) setRoutines(routines.map(r => r.id === editItem.id ? newRoutine : r));
-      else setRoutines([newRoutine, ...routines]);
-    }
-
-    setIsSaving(false);
-    setShowSuccess(true);
-
-    // Tempo para exibir o check de sucesso antes de fechar
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
-    setIsModalOpen(false);
-    setEditItem(null);
-    setSelectedExerciseNames([]);
-    setShowSuccess(false);
-  };
-
-  const isMint = theme.name === 'ZFIT Mint';
-  const depthClass = isMint ? 'premium-depth-light' : 'premium-depth-dark';
-
-  const renderModal = () => {
-    if (!isModalOpen) return null;
-    return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => !isSaving && !showSuccess && setIsModalOpen(false)} />
-        <div className={`relative w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-[40px] border p-10 animate-in zoom-in-95 duration-300 hide-scrollbar ${depthClass}`} style={{ backgroundColor: theme.card, borderColor: theme.border }}>
-          <div className="flex justify-between items-center mb-8">
-            <h3 className="text-2xl font-black uppercase tracking-tighter" style={{ color: theme.text }}>
-              {editItem ? 'Editar' : 'Criar Novo'} {modalType === 'coupon' ? 'Cupom' : modalType === 'blog' ? 'Artigo' : modalType === 'routine' ? 'Treino Público' : 'Item'}
-            </h3>
-            <button onClick={() => setIsModalOpen(false)} disabled={isSaving || showSuccess} className="opacity-40 hover:opacity-100 transition-opacity disabled:hidden"><X /></button>
-          </div>
-
-          <form onSubmit={handleSave} className="space-y-6">
-            {modalType === 'coupon' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase opacity-40 ml-4">Código do Cupom</label>
-                  <input name="code" defaultValue={editItem?.code} required className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black uppercase" style={{ color: theme.text }} placeholder="EX: ZFIT30" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase opacity-40 ml-4">Desconto</label>
-                    <input name="discount" type="number" defaultValue={editItem?.discount} required className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} placeholder="30" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase opacity-40 ml-4">Tipo</label>
-                    <select name="type" defaultValue={editItem?.type || 'percentage'} className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black appearance-none" style={{ color: theme.text }}>
-                      <option value="percentage">Porcentagem (%)</option>
-                      <option value="fixed">Fixo (R$)</option>
-                    </select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase opacity-40 ml-4">Data de Expiração</label>
-                  <input name="expiresAt" type="date" defaultValue={editItem?.expiresAt} required className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-                </div>
-              </>
-            )}
-
-            {modalType === 'blog' && (
-              <>
-                <input name="title" defaultValue={editItem?.title} required placeholder="Título do Artigo" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-                <input name="category" defaultValue={editItem?.category} required placeholder="Categoria (ex: Treino, Nutrição)" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-                <input name="image" defaultValue={editItem?.image} placeholder="URL da Imagem (Unsplash recomendada)" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-                <textarea name="excerpt" defaultValue={editItem?.excerpt} required placeholder="Resumo curto..." className="w-full h-24 rounded-2xl bg-white/5 border border-white/10 p-6 font-medium text-sm" style={{ color: theme.text }} />
-                <textarea name="content" defaultValue={editItem?.content} required placeholder="Conteúdo completo em texto..." className="w-full h-40 rounded-2xl bg-white/5 border border-white/10 p-6 font-medium text-sm" style={{ color: theme.text }} />
-                <input name="author" defaultValue={editItem?.author || 'ZFIT Admin'} required placeholder="Autor" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-              </>
-            )}
-
-            {modalType === 'exercise' && (
-              <>
-                <input name="name" defaultValue={editItem?.name} required placeholder="Nome do Exercício" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-                <input name="muscleGroup" defaultValue={editItem?.muscleGroup} required placeholder="Grupo Muscular" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black" style={{ color: theme.text }} />
-              </>
-            )}
-
-            {modalType === 'routine' && (
-              <div className="space-y-6">
-                <input name="title" defaultValue={editItem?.title} required placeholder="Título da Rotina Pública" className="w-full h-14 rounded-2xl bg-white/5 border border-white/10 px-6 font-black uppercase" style={{ color: theme.text }} />
-                
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase opacity-40 ml-4">Selecionar Exercícios</label>
-                  <div className="grid grid-cols-1 gap-2 max-h-48 overflow-y-auto pr-2 hide-scrollbar">
-                    {exercises.map((ex, i) => {
-                      const isSelected = selectedExerciseNames.includes(ex.name);
-                      return (
-                        <button 
-                          type="button"
-                          key={i}
-                          disabled={isSaving || showSuccess}
-                          onClick={() => setSelectedExerciseNames(prev => isSelected ? prev.filter(n => n !== ex.name) : [...prev, ex.name])}
-                          className={`flex items-center justify-between p-4 rounded-xl border transition-all ${isSelected ? 'bg-white/10 border-white/20' : 'bg-white/5 border-transparent'}`}
-                        >
-                          <span className="text-[11px] font-black uppercase" style={{ color: theme.text }}>{ex.name}</span>
-                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${isSelected ? 'bg-primary border-primary' : 'border-white/10'}`} style={isSelected ? { backgroundColor: theme.primary, borderColor: theme.primary } : {}}>
-                            {isSelected && <Check size={14} className="text-black" strokeWidth={4} />}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
+      {/* Leaderboard */}
+      <div className="rounded-[30px] p-6 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <h3 className="text-lg font-black uppercase tracking-tighter mb-6" style={{ color: theme.text }}>
+          🏆 Top Atletas (Volume Total)
+        </h3>
+        <div className="space-y-3">
+          {leaderboard.slice(0, 5).map((entry, i) => (
+            <div key={entry.user.id} className="flex items-center justify-between p-4 rounded-2xl" style={{ backgroundColor: theme.cardSecondary }}>
+              <div className="flex items-center gap-4">
+                <span className={`text-2xl font-black ${i === 0 ? 'text-yellow-400' : i === 1 ? 'text-gray-300' : i === 2 ? 'text-orange-400' : 'opacity-40'}`}>
+                  #{i + 1}
+                </span>
+                <img src={entry.user.avatar} alt="" className="w-10 h-10 rounded-xl" />
+                <div>
+                  <p className="font-black text-sm" style={{ color: theme.text }}>{entry.user.name}</p>
+                  <p className="text-[10px] opacity-40" style={{ color: theme.text }}>{entry.totalWorkouts} treinos</p>
                 </div>
               </div>
-            )}
+              <div className="text-right">
+                <p className="font-black" style={{ color: theme.primary }}>{(entry.totalVolume / 1000).toFixed(1)} ton</p>
+              </div>
+            </div>
+          ))}
+          {leaderboard.length === 0 && (
+            <p className="text-center opacity-40 py-8" style={{ color: theme.text }}>Nenhum dado disponível ainda</p>
+          )}
+        </div>
+      </div>
 
-            <button 
-              type="submit" 
-              disabled={isSaving || showSuccess}
-              className={`w-full h-16 rounded-3xl font-black uppercase text-xs tracking-widest flex items-center justify-center gap-2 transition-all active:scale-95 shadow-xl relative overflow-hidden ${showSuccess ? 'bg-[#adf94e]/20 text-[#adf94e]' : ''}`} 
-              style={{ backgroundColor: showSuccess ? undefined : theme.primary, color: showSuccess ? undefined : (isMint ? '#FFF' : '#000') }}
-            >
-              {isSaving ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 size={18} className="animate-spin" />
-                  Salvando...
+      {/* Top Exercises */}
+      <div className="rounded-[30px] p-6 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <h3 className="text-lg font-black uppercase tracking-tighter mb-6" style={{ color: theme.text }}>
+          💪 Exercícios Mais Usados
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {exerciseStats.slice(0, 8).map((ex, i) => (
+            <div key={ex.name} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: theme.cardSecondary }}>
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-black opacity-20">#{i + 1}</span>
+                <div>
+                  <p className="font-bold text-sm" style={{ color: theme.text }}>{ex.name}</p>
+                  <p className="text-[10px] opacity-40" style={{ color: theme.text }}>{ex.muscleGroup}</p>
                 </div>
-              ) : showSuccess ? (
-                <div className="flex items-center gap-2 animate-in fade-in duration-500">
-                  <Check size={18} strokeWidth={3} />
-                  Salvo com Sucesso!
-                </div>
-              ) : (
-                <>
-                  <Save size={18} /> Salvar Alterações
-                </>
-              )}
-            </button>
-          </form>
+              </div>
+              <span className="px-3 py-1 rounded-full text-xs font-black" style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}>
+                {ex.uses}x
+              </span>
+            </div>
+          ))}
+          {exerciseStats.length === 0 && (
+            <p className="text-center opacity-40 py-8 col-span-2" style={{ color: theme.text }}>Nenhum dado disponível</p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderUsers = () => {
+    const filteredUsers = users.filter(u =>
+      u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email?.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+      <div className="space-y-4">
+        {/* Search */}
+        <div className="flex gap-4 items-center">
+          <div className="flex-1 relative">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 opacity-40" style={{ color: theme.text }} />
+            <input
+              type="text"
+              placeholder="Buscar usuários..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full h-12 pl-12 pr-4 rounded-xl border outline-none"
+              style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+            />
+          </div>
+          <button
+            onClick={loadData}
+            className="h-12 px-4 rounded-xl flex items-center gap-2"
+            style={{ backgroundColor: theme.cardSecondary, color: theme.text }}
+          >
+            <RefreshCw size={18} />
+          </button>
+        </div>
+
+        {/* Users Table */}
+        <div className="rounded-[30px] border overflow-hidden" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr style={{ backgroundColor: theme.cardSecondary }}>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Usuário</th>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Email</th>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Plano</th>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Role</th>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Level</th>
+                  <th className="text-left p-4 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map(user => (
+                  <tr key={user.id} className="border-t" style={{ borderColor: theme.border }}>
+                    <td className="p-4">
+                      <div className="flex items-center gap-3">
+                        <img src={user.avatar} alt="" className="w-8 h-8 rounded-lg" />
+                        <span className="font-bold text-sm" style={{ color: theme.text }}>{user.name}</span>
+                      </div>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-sm opacity-60" style={{ color: theme.text }}>{user.email}</span>
+                    </td>
+                    <td className="p-4">
+                      <select
+                        value={user.plan || 'Free'}
+                        onChange={(e) => handleUpdateUserPlan(user.id, e.target.value as any)}
+                        className="px-3 py-1 rounded-lg text-xs font-bold border"
+                        style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                      >
+                        <option value="Free">Free</option>
+                        <option value="Pro">Pro</option>
+                        <option value="Elite">Elite</option>
+                      </select>
+                    </td>
+                    <td className="p-4">
+                      <select
+                        value={user.role || 'user'}
+                        onChange={(e) => handleUpdateUserRole(user.id, e.target.value as any)}
+                        className="px-3 py-1 rounded-lg text-xs font-bold border"
+                        style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                      >
+                        <option value="user">User</option>
+                        <option value="admin">Admin</option>
+                      </select>
+                    </td>
+                    <td className="p-4">
+                      <span className="font-bold" style={{ color: theme.primary }}>Lv. {user.level || 1}</span>
+                    </td>
+                    <td className="p-4">
+                      <span className="text-xs opacity-40" style={{ color: theme.text }}>{user.xp || 0} XP</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
   };
 
-  const renderOverview = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, i) => {
-          const IconComponent = stat.icon;
-          return (
-            <div key={i} className={`rounded-[35px] p-6 border flex flex-col justify-between h-44 transition-all hover:border-white/10 ${depthClass}`} style={{ backgroundColor: theme.card, borderColor: theme.border }}>
-              <div className="flex justify-between items-start">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${theme.primary}15`, color: theme.primary }}>
-                  <IconComponent size={20} />
-                </div>
-                <div className="flex items-center space-x-1 px-2 py-1 rounded-full bg-[#adf94e]/10 text-[#adf94e] text-[8px] font-black uppercase">
-                  <ArrowUpRight size={10} />
-                  <span>{stat.change}</span>
-                </div>
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-widest opacity-30 block mb-1" style={{ color: theme.text }}>{stat.label}</span>
-                <h4 className="text-3xl font-black tracking-tighter uppercase" style={{ color: theme.text }}>{stat.value}</h4>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-
-  const renderSaaSManagement = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className={`rounded-[45px] border overflow-hidden ${depthClass}`} style={{ backgroundColor: theme.card, borderColor: theme.border }}>
-        <div className="p-8 border-b flex justify-between items-center" style={{ borderColor: theme.border }}>
-          <div><h3 className="text-2xl font-black uppercase tracking-tighter" style={{ color: theme.text }}>Cupons de Desconto</h3></div>
-          <button onClick={() => { setEditItem(null); setModalType('coupon'); setIsModalOpen(true); }} className="h-12 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:scale-105 active:scale-95 transition-all" style={{ backgroundColor: theme.primary, color: isMint ? '#FFF' : '#000' }}><Plus size={16} /> Novo Cupom</button>
-        </div>
-        <table className="w-full text-left">
-          <thead className="bg-white/5 text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}><tr className="border-b" style={{ borderColor: theme.border }}><th className="px-8 py-5">Código</th><th className="px-8 py-5">Desconto</th><th className="px-8 py-5">Status</th><th className="px-8 py-5 text-right">Ações</th></tr></thead>
-          <tbody className="divide-y divide-white/5" style={{ borderColor: theme.border }}>
-            {coupons.map(coupon => (
-              <tr key={coupon.id} className="hover:bg-white/[0.02] transition-colors group">
-                <td className="px-8 py-6 flex items-center gap-3"><Ticket size={18} style={{ color: theme.primary }} /><span className="text-xs font-black uppercase" style={{ color: theme.text }}>{coupon.code}</span></td>
-                <td className="px-8 py-6 font-black text-xs" style={{ color: theme.text }}>{coupon.discount}{coupon.type === 'percentage' ? '%' : ' R$'}</td>
-                <td className="px-8 py-6"><span className={`text-[9px] font-black uppercase px-2 py-1 rounded-md ${coupon.status === 'active' ? 'bg-[#adf94e]/10 text-[#adf94e]' : 'bg-red-500/10 text-red-500'}`}>{coupon.status === 'active' ? 'Ativo' : 'Expirado'}</span></td>
-                <td className="px-8 py-6 text-right"><div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditItem(coupon); setModalType('coupon'); setIsModalOpen(true); }} className="p-2 hover:bg-white/10 rounded-lg" style={{ color: theme.text }}><Edit3 size={16} /></button><button onClick={() => handleDelete(coupon.id, 'coupon')} className="p-2 hover:bg-red-500/10 hover:text-red-500 rounded-lg"><Trash2 size={16} /></button></div></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-
-  const renderContentManagement = () => (
-    <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex bg-white/5 p-1.5 rounded-3xl border border-white/5 mb-8" style={{ borderColor: theme.border }}>
-        {(['blog', 'exercises', 'routines'] as ContentSubTab[]).map(tab => (
-          <button key={tab} onClick={() => setContentSubTab(tab)} className={`flex-1 px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${contentSubTab === tab ? 'bg-white text-black shadow-lg' : 'text-white/40 hover:text-white'}`} style={contentSubTab === tab ? { backgroundColor: theme.primary, color: isMint ? '#FFF' : '#000' } : {}}>
-            {tab === 'blog' ? 'Blog' : tab === 'exercises' ? 'Exercícios' : 'Rotinas'}
-          </button>
-        ))}
+  const renderRoutines = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-black" style={{ color: theme.text }}>Rotinas Públicas</h3>
+        <button
+          onClick={() => openModal('routine')}
+          className="h-12 px-6 rounded-xl flex items-center gap-2 font-bold"
+          style={{ backgroundColor: theme.primary, color: '#000' }}
+        >
+          <Plus size={18} /> Nova Rotina
+        </button>
       </div>
 
-      <div className={`rounded-[45px] border overflow-hidden ${depthClass}`} style={{ backgroundColor: theme.card, borderColor: theme.border }}>
-        <div className="p-8 border-b flex justify-between items-center" style={{ borderColor: theme.border }}>
-          <h3 className="text-2xl font-black uppercase tracking-tighter" style={{ color: theme.text }}>{contentSubTab === 'blog' ? 'Gestão de Artigos' : contentSubTab === 'exercises' ? 'Base de Dados' : 'Treinos Públicos'}</h3>
-          <button onClick={() => { 
-            setEditItem(null); 
-            setSelectedExerciseNames([]);
-            setModalType(contentSubTab === 'blog' ? 'blog' : contentSubTab === 'exercises' ? 'exercise' : 'routine'); 
-            setIsModalOpen(true); 
-          }} className="h-12 px-6 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2" style={{ backgroundColor: theme.primary, color: isMint ? '#FFF' : '#000' }}><Plus size={16} /> Novo Item</button>
-        </div>
-
-        <div className="p-4 space-y-4">
-          {contentSubTab === 'blog' && articles.map(article => (
-            <div key={article.id} className="flex items-center justify-between p-6 rounded-[30px] bg-white/5 hover:bg-white/10 transition-colors group">
-              <div className="flex items-center gap-6">
-                <img src={article.image} className="w-16 h-16 rounded-2xl object-cover" />
-                <div>
-                  <h4 className="text-sm font-black uppercase" style={{ color: theme.text }}>{article.title}</h4>
-                  <p className="text-[9px] font-black opacity-30 uppercase">{article.category} • {article.date}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {routines.map(routine => (
+          <div key={routine.id} className="rounded-[25px] p-5 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  {routine.is_premium && <Crown size={14} className="text-yellow-400" />}
+                  <h4 className="font-black" style={{ color: theme.text }}>{routine.title}</h4>
                 </div>
+                <p className="text-xs opacity-40" style={{ color: theme.text }}>{routine.description}</p>
               </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => { setEditItem(article); setModalType('blog'); setIsModalOpen(true); }} className="p-3 bg-white/10 rounded-xl" style={{ color: theme.text }}><Edit3 size={18} /></button>
-                <button onClick={() => handleDelete(article.id, 'blog')} className="p-3 bg-red-500/10 text-red-500 rounded-xl"><Trash2 size={18} /></button>
-              </div>
-            </div>
-          ))}
-
-          {contentSubTab === 'exercises' && exercises.map((ex, i) => (
-            <div key={i} className="flex items-center justify-between p-6 rounded-[30px] bg-white/5 hover:bg-white/10 transition-colors group">
-              <div>
-                <h4 className="text-sm font-black uppercase" style={{ color: theme.text }}>{ex.name}</h4>
-                <p className="text-[9px] font-black opacity-30 uppercase">{ex.muscleGroup}</p>
-              </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={() => { setEditItem({...ex, id: i.toString()}); setModalType('exercise'); setIsModalOpen(true); }} className="p-3 bg-white/10 rounded-xl" style={{ color: theme.text }}><Edit3 size={18} /></button>
-                <button onClick={() => handleDelete(i.toString(), 'exercise')} className="p-3 bg-red-500/10 text-red-500 rounded-xl"><Trash2 size={18} /></button>
-              </div>
-            </div>
-          ))}
-          
-          {contentSubTab === 'routines' && routines.map(r => (
-            <div key={r.id} className="flex items-center justify-between p-6 rounded-[30px] bg-white/5 hover:bg-white/10 transition-colors group">
-              <div>
-                <h4 className="text-sm font-black uppercase" style={{ color: theme.text }}>{r.title}</h4>
-                <p className="text-[9px] font-black opacity-30 uppercase">{r.muscleGroups.join(' • ')} • {r.exercises.length} Exs</p>
-              </div>
-              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button 
-                  onClick={() => { 
-                    setEditItem(r); 
-                    setModalType('routine'); 
-                    setSelectedExerciseNames(r.exercises.map(e => e.name));
-                    setIsModalOpen(true); 
-                  }} 
-                  className="p-3 bg-white/10 rounded-xl" style={{ color: theme.text }}
-                >
-                  <Edit3 size={18} />
+              <div className="flex gap-2">
+                <button onClick={() => openModal('routine', routine)} className="p-2 rounded-lg" style={{ backgroundColor: theme.cardSecondary }}>
+                  <Edit3 size={16} style={{ color: theme.text }} />
                 </button>
-                <button className="p-3 bg-red-500/10 text-red-500 rounded-xl" onClick={() => handleDelete(r.id, 'routine')}><Trash2 size={18} /></button>
+                <button onClick={() => handleDelete('routine', routine.id)} className="p-2 rounded-lg bg-red-500/10">
+                  <Trash2 size={16} className="text-red-500" />
+                </button>
               </div>
             </div>
+            <div className="flex flex-wrap gap-2 mb-3">
+              {routine.muscle_groups?.map(mg => (
+                <span key={mg} className="px-2 py-1 rounded-full text-[10px] font-bold" style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}>
+                  {mg}
+                </span>
+              ))}
+            </div>
+            <div className="flex justify-between text-xs opacity-40" style={{ color: theme.text }}>
+              <span>{routine.exercises?.length || 0} exercícios</span>
+              <span>{routine.duration_minutes} min</span>
+              <span>{routine.uses || 0} usos</span>
+            </div>
+          </div>
+        ))}
+        {routines.length === 0 && (
+          <p className="text-center opacity-40 py-8 col-span-2" style={{ color: theme.text }}>Nenhuma rotina cadastrada</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderExercises = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-black" style={{ color: theme.text }}>Catálogo de Exercícios</h3>
+        <button
+          onClick={() => openModal('exercise')}
+          className="h-12 px-6 rounded-xl flex items-center gap-2 font-bold"
+          style={{ backgroundColor: theme.primary, color: '#000' }}
+        >
+          <Plus size={18} /> Novo Exercício
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {exercises.map(exercise => (
+          <div key={exercise.id} className="rounded-[20px] p-4 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+            <div className="flex justify-between items-start mb-2">
+              <h4 className="font-black text-sm" style={{ color: theme.text }}>{exercise.name}</h4>
+              <div className="flex gap-1">
+                <button onClick={() => openModal('exercise', exercise)} className="p-1.5 rounded-lg" style={{ backgroundColor: theme.cardSecondary }}>
+                  <Edit3 size={14} style={{ color: theme.text }} />
+                </button>
+                <button onClick={() => handleDelete('exercise', exercise.id)} className="p-1.5 rounded-lg bg-red-500/10">
+                  <Trash2 size={14} className="text-red-500" />
+                </button>
+              </div>
+            </div>
+            <span className="px-2 py-1 rounded-full text-[10px] font-bold inline-block" style={{ backgroundColor: `${theme.primary}20`, color: theme.primary }}>
+              {exercise.muscle_group}
+            </span>
+            {exercise.equipment && (
+              <p className="text-[10px] opacity-40 mt-2" style={{ color: theme.text }}>Equipamento: {exercise.equipment}</p>
+            )}
+          </div>
+        ))}
+        {exercises.length === 0 && (
+          <p className="text-center opacity-40 py-8 col-span-3" style={{ color: theme.text }}>Nenhum exercício cadastrado</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderBlog = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-black" style={{ color: theme.text }}>Artigos do Blog</h3>
+        <button
+          onClick={() => openModal('article')}
+          className="h-12 px-6 rounded-xl flex items-center gap-2 font-bold"
+          style={{ backgroundColor: theme.primary, color: '#000' }}
+        >
+          <Plus size={18} /> Novo Artigo
+        </button>
+      </div>
+
+      <div className="space-y-4">
+        {articles.map(article => (
+          <div key={article.id} className="rounded-[25px] p-5 border flex gap-4" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+            <img src={article.image} alt="" className="w-24 h-24 rounded-xl object-cover" />
+            <div className="flex-1">
+              <h4 className="font-black mb-1" style={{ color: theme.text }}>{article.title}</h4>
+              <p className="text-xs opacity-40 line-clamp-2 mb-2" style={{ color: theme.text }}>{article.excerpt}</p>
+              <div className="flex items-center gap-4 text-[10px] opacity-40" style={{ color: theme.text }}>
+                <span className="flex items-center gap-1"><Eye size={12} /> {article.views || 0}</span>
+                <span className="flex items-center gap-1"><Heart size={12} /> {article.likes || 0}</span>
+                <span className="flex items-center gap-1"><Share2 size={12} /> {article.shares || 0}</span>
+                <span>{article.category}</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button onClick={() => openModal('article', article)} className="p-2 rounded-lg" style={{ backgroundColor: theme.cardSecondary }}>
+                <Edit3 size={16} style={{ color: theme.text }} />
+              </button>
+              <button onClick={() => handleDelete('article', article.id)} className="p-2 rounded-lg bg-red-500/10">
+                <Trash2 size={16} className="text-red-500" />
+              </button>
+            </div>
+          </div>
+        ))}
+        {articles.length === 0 && (
+          <p className="text-center opacity-40 py-8" style={{ color: theme.text }}>Nenhum artigo cadastrado</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderCoupons = () => (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <h3 className="text-lg font-black" style={{ color: theme.text }}>Cupons de Desconto</h3>
+        <button
+          onClick={() => openModal('coupon')}
+          className="h-12 px-6 rounded-xl flex items-center gap-2 font-bold"
+          style={{ backgroundColor: theme.primary, color: '#000' }}
+        >
+          <Plus size={18} /> Novo Cupom
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {coupons.map(coupon => (
+          <div key={coupon.id} className="rounded-[20px] p-4 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+            <div className="flex justify-between items-start mb-3">
+              <code className="text-lg font-black" style={{ color: theme.primary }}>{coupon.code}</code>
+              <div className="flex gap-1">
+                <button onClick={() => openModal('coupon', coupon)} className="p-1.5 rounded-lg" style={{ backgroundColor: theme.cardSecondary }}>
+                  <Edit3 size={14} style={{ color: theme.text }} />
+                </button>
+                <button onClick={() => handleDelete('coupon', coupon.id)} className="p-1.5 rounded-lg bg-red-500/10">
+                  <Trash2 size={14} className="text-red-500" />
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1 text-sm" style={{ color: theme.text }}>
+              <p className="font-bold">{coupon.discount}{coupon.type === 'percentage' ? '%' : ' R$'} de desconto</p>
+              <p className="text-xs opacity-40">Expira: {new Date(coupon.expiresAt).toLocaleDateString('pt-BR')}</p>
+              <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${coupon.status === 'active' ? 'bg-green-500/20 text-green-500' : 'bg-red-500/20 text-red-500'}`}>
+                {coupon.status === 'active' ? 'Ativo' : 'Expirado'}
+              </span>
+            </div>
+          </div>
+        ))}
+        {coupons.length === 0 && (
+          <p className="text-center opacity-40 py-8 col-span-3" style={{ color: theme.text }}>Nenhum cupom cadastrado</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderAnalytics = () => (
+    <div className="space-y-6">
+      {/* API Usage */}
+      <div className="rounded-[30px] p-6 border" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <h3 className="text-lg font-black uppercase tracking-tighter mb-4" style={{ color: theme.text }}>
+          📊 Uso de API por Usuário (Mês Atual)
+        </h3>
+        <div className="grid grid-cols-2 gap-4 mb-6">
+          <StatCard title="Chamadas Hoje" value={stats?.apiCallsToday || 0} icon={<Activity size={24} />} color="#4CAF50" />
+          <StatCard title="Chamadas Mês" value={stats?.apiCallsThisMonth || 0} icon={<BarChart3 size={24} />} color="#2196F3" />
+        </div>
+        <div className="space-y-2">
+          {apiUsage.slice(0, 10).map((item, i) => (
+            <div key={item.userId} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: theme.cardSecondary }}>
+              <div className="flex items-center gap-3">
+                <span className="text-lg font-black opacity-20">#{i + 1}</span>
+                <span className="font-bold" style={{ color: theme.text }}>{item.userName}</span>
+              </div>
+              <span className="font-black" style={{ color: theme.primary }}>{item.calls} calls</span>
+            </div>
           ))}
+          {apiUsage.length === 0 && (
+            <p className="text-center opacity-40 py-4" style={{ color: theme.text }}>Nenhum dado de uso disponível</p>
+          )}
+        </div>
+      </div>
+
+      {/* Subscription Analytics */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="rounded-[30px] p-6 border text-center" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#4CAF5020' }}>
+            <Users size={32} className="text-green-500" />
+          </div>
+          <h4 className="text-4xl font-black" style={{ color: theme.text }}>{users.filter(u => u.plan === 'Free').length}</h4>
+          <p className="text-sm opacity-40 font-bold" style={{ color: theme.text }}>Plano Free</p>
+        </div>
+        <div className="rounded-[30px] p-6 border text-center" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#2196F320' }}>
+            <Zap size={32} className="text-blue-500" />
+          </div>
+          <h4 className="text-4xl font-black" style={{ color: theme.text }}>{stats?.proSubscribers || 0}</h4>
+          <p className="text-sm opacity-40 font-bold" style={{ color: theme.text }}>Plano Pro</p>
+        </div>
+        <div className="rounded-[30px] p-6 border text-center" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+          <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: '#FFD70020' }}>
+            <Crown size={32} className="text-yellow-500" />
+          </div>
+          <h4 className="text-4xl font-black" style={{ color: theme.text }}>{stats?.eliteSubscribers || 0}</h4>
+          <p className="text-sm opacity-40 font-bold" style={{ color: theme.text }}>Plano Elite</p>
         </div>
       </div>
     </div>
   );
+
+  const renderModal = () => {
+    if (!showModal) return null;
+
+    return (
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.8)' }}>
+        <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-[30px] p-6 border" style={{ backgroundColor: theme.bg, borderColor: theme.border }}>
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="text-xl font-black uppercase" style={{ color: theme.text }}>
+              {editingItem ? 'Editar' : 'Criar'} {modalType === 'routine' ? 'Rotina' : modalType === 'exercise' ? 'Exercício' : modalType === 'article' ? 'Artigo' : 'Cupom'}
+            </h3>
+            <button onClick={closeModal} className="p-2 rounded-xl" style={{ backgroundColor: theme.cardSecondary }}>
+              <X size={20} style={{ color: theme.text }} />
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            {/* ROUTINE FORM */}
+            {modalType === 'routine' && (
+              <>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Título</label>
+                  <input
+                    type="text"
+                    value={formData.title || ''}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full h-12 px-4 rounded-xl border outline-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Descrição</label>
+                  <textarea
+                    value={formData.description || ''}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    className="w-full h-24 px-4 py-3 rounded-xl border outline-none resize-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Dificuldade</label>
+                    <select
+                      value={formData.difficulty || 'Intermediário'}
+                      onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    >
+                      {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Duração (min)</label>
+                    <input
+                      type="number"
+                      value={formData.duration_minutes || 60}
+                      onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-2" style={{ color: theme.text }}>Grupos Musculares</label>
+                  <div className="flex flex-wrap gap-2">
+                    {MUSCLE_GROUPS.map(mg => (
+                      <button
+                        key={mg}
+                        type="button"
+                        onClick={() => {
+                          const groups = formData.muscle_groups || [];
+                          if (groups.includes(mg)) {
+                            setFormData({ ...formData, muscle_groups: groups.filter((g: string) => g !== mg) });
+                          } else {
+                            setFormData({ ...formData, muscle_groups: [...groups, mg] });
+                          }
+                        }}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${(formData.muscle_groups || []).includes(mg) ? 'text-black' : 'opacity-40'
+                          }`}
+                        style={{
+                          backgroundColor: (formData.muscle_groups || []).includes(mg) ? theme.primary : theme.cardSecondary,
+                          color: (formData.muscle_groups || []).includes(mg) ? '#000' : theme.text
+                        }}
+                      >
+                        {mg}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={formData.is_premium || false}
+                    onChange={(e) => setFormData({ ...formData, is_premium: e.target.checked })}
+                    className="w-5 h-5 rounded"
+                  />
+                  <label className="font-bold" style={{ color: theme.text }}>Rotina Premium (apenas Pro/Elite)</label>
+                </div>
+
+                {/* Exercises in Routine */}
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs font-bold opacity-40" style={{ color: theme.text }}>Exercícios da Rotina</label>
+                    <button
+                      type="button"
+                      onClick={addExerciseToRoutine}
+                      className="text-xs flex items-center gap-1 font-bold"
+                      style={{ color: theme.primary }}
+                    >
+                      <Plus size={14} /> Adicionar Exercício
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {(formData.exercises || []).map((ex: Exercise, i: number) => (
+                      <div key={ex.id} className="p-3 rounded-xl flex items-center gap-3" style={{ backgroundColor: theme.cardSecondary }}>
+                        <input
+                          type="text"
+                          value={ex.name}
+                          onChange={(e) => updateExerciseInRoutine(i, 'name', e.target.value)}
+                          placeholder="Nome do exercício"
+                          className="flex-1 h-10 px-3 rounded-lg border outline-none text-sm"
+                          style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
+                        />
+                        <select
+                          value={ex.muscleGroup}
+                          onChange={(e) => updateExerciseInRoutine(i, 'muscleGroup', e.target.value)}
+                          className="h-10 px-3 rounded-lg border outline-none text-sm"
+                          style={{ backgroundColor: theme.bg, borderColor: theme.border, color: theme.text }}
+                        >
+                          {MUSCLE_GROUPS.map(mg => <option key={mg} value={mg}>{mg}</option>)}
+                        </select>
+                        <button onClick={() => removeExerciseFromRoutine(i)} className="p-2 rounded-lg bg-red-500/10">
+                          <Trash2 size={16} className="text-red-500" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* EXERCISE FORM */}
+            {modalType === 'exercise' && (
+              <>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Nome do Exercício</label>
+                  <input
+                    type="text"
+                    value={formData.name || ''}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    className="w-full h-12 px-4 rounded-xl border outline-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Grupo Muscular</label>
+                    <select
+                      value={formData.muscle_group || 'Peito'}
+                      onChange={(e) => setFormData({ ...formData, muscle_group: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    >
+                      {MUSCLE_GROUPS.map(mg => <option key={mg} value={mg}>{mg}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Dificuldade</label>
+                    <select
+                      value={formData.difficulty || 'Intermediário'}
+                      onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    >
+                      {DIFFICULTIES.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Equipamento</label>
+                  <input
+                    type="text"
+                    value={formData.equipment || ''}
+                    onChange={(e) => setFormData({ ...formData, equipment: e.target.value })}
+                    placeholder="Ex: Barra, Halteres, Máquina..."
+                    className="w-full h-12 px-4 rounded-xl border outline-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Instruções</label>
+                  <textarea
+                    value={formData.instructions || ''}
+                    onChange={(e) => setFormData({ ...formData, instructions: e.target.value })}
+                    placeholder="Como executar o exercício..."
+                    className="w-full h-32 px-4 py-3 rounded-xl border outline-none resize-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* ARTICLE FORM */}
+            {modalType === 'article' && (
+              <>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Título</label>
+                  <input
+                    type="text"
+                    value={formData.title || ''}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    className="w-full h-12 px-4 rounded-xl border outline-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Resumo</label>
+                  <textarea
+                    value={formData.excerpt || ''}
+                    onChange={(e) => setFormData({ ...formData, excerpt: e.target.value })}
+                    className="w-full h-20 px-4 py-3 rounded-xl border outline-none resize-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Conteúdo</label>
+                  <textarea
+                    value={formData.content || ''}
+                    onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                    className="w-full h-40 px-4 py-3 rounded-xl border outline-none resize-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Autor</label>
+                    <input
+                      type="text"
+                      value={formData.author || ''}
+                      onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Categoria</label>
+                    <input
+                      type="text"
+                      value={formData.category || ''}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>URL da Imagem</label>
+                  <input
+                    type="text"
+                    value={formData.image || ''}
+                    onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+                    className="w-full h-12 px-4 rounded-xl border outline-none"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* COUPON FORM */}
+            {modalType === 'coupon' && (
+              <>
+                <div>
+                  <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Código do Cupom</label>
+                  <input
+                    type="text"
+                    value={formData.code || ''}
+                    onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
+                    className="w-full h-12 px-4 rounded-xl border outline-none font-mono uppercase"
+                    style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Desconto</label>
+                    <input
+                      type="number"
+                      value={formData.discount || 10}
+                      onChange={(e) => setFormData({ ...formData, discount: parseFloat(e.target.value) })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Tipo</label>
+                    <select
+                      value={formData.type || 'percentage'}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    >
+                      <option value="percentage">Porcentagem (%)</option>
+                      <option value="fixed">Valor Fixo (R$)</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Expira em</label>
+                    <input
+                      type="date"
+                      value={formData.expiresAt || ''}
+                      onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold opacity-40 block mb-1" style={{ color: theme.text }}>Status</label>
+                    <select
+                      value={formData.status || 'active'}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.value })}
+                      className="w-full h-12 px-4 rounded-xl border outline-none"
+                      style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}
+                    >
+                      <option value="active">Ativo</option>
+                      <option value="expired">Expirado</option>
+                    </select>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-3 mt-6">
+            <button onClick={closeModal} className="h-12 px-6 rounded-xl font-bold" style={{ backgroundColor: theme.cardSecondary, color: theme.text }}>
+              Cancelar
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="h-12 px-6 rounded-xl font-bold flex items-center gap-2"
+              style={{ backgroundColor: theme.primary, color: '#000' }}
+            >
+              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+              Salvar
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ backgroundColor: theme.bg }}>
+        <div className="text-center">
+          <Loader2 size={48} className="animate-spin mx-auto mb-4" style={{ color: theme.primary }} />
+          <p className="font-bold opacity-40" style={{ color: theme.text }}>Carregando dashboard...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="px-6 pb-24 max-w-7xl mx-auto">
-      {renderModal()}
-      <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-8">
-        <div>
-          <div className="flex items-center gap-3 mb-2">
-            <ShieldCheck size={24} style={{ color: theme.primary }} />
-            <span className="text-[10px] font-black uppercase tracking-[0.4em] opacity-40" style={{ color: theme.text }}>Admin Panel v3.0</span>
-          </div>
-          <h2 className="text-5xl font-black tracking-tighter leading-[0.8] uppercase" style={{ color: theme.text }}>PLATAFORMA<br/>ADMIN</h2>
+    <div className="fixed inset-0 z-50 flex" style={{ backgroundColor: theme.bg }}>
+      {/* Sidebar */}
+      <div className="w-64 border-r flex flex-col" style={{ backgroundColor: theme.card, borderColor: theme.border }}>
+        <div className="p-6 border-b" style={{ borderColor: theme.border }}>
+          <h1 className="text-xl font-black uppercase tracking-tighter" style={{ color: theme.text }}>
+            ⚙️ Admin
+          </h1>
+          <p className="text-xs opacity-40 mt-1" style={{ color: theme.text }}>Painel de Controle</p>
         </div>
 
-        <div className="flex bg-white/5 p-1.5 rounded-3xl border border-white/5" style={{ borderColor: theme.border }}>
-          {(['overview', 'saas', 'content'] as const).map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-black shadow-lg' : 'text-white/40 hover:text-white'}`} style={activeTab === tab ? { backgroundColor: theme.primary, color: isMint ? '#FFF' : '#000' } : {}}>
-              {tab === 'overview' ? 'Geral' : tab === 'saas' ? 'SaaS / Cupons' : 'Conteúdo'}
+        <nav className="flex-1 p-4 space-y-2">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${activeTab === tab.id ? 'text-black' : 'opacity-60 hover:opacity-100'
+                }`}
+              style={{
+                backgroundColor: activeTab === tab.id ? theme.primary : 'transparent',
+                color: activeTab === tab.id ? '#000' : theme.text
+              }}
+            >
+              {tab.icon}
+              {tab.label}
             </button>
           ))}
+        </nav>
+
+        <div className="p-4 border-t" style={{ borderColor: theme.border }}>
+          <button
+            onClick={onClose}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold text-sm"
+            style={{ backgroundColor: theme.cardSecondary, color: theme.text }}
+          >
+            <X size={18} />
+            Fechar Admin
+          </button>
         </div>
       </div>
 
-      {activeTab === 'overview' && renderOverview()}
-      {activeTab === 'saas' && renderSaaSManagement()}
-      {activeTab === 'content' && renderContentManagement()}
+      {/* Main Content */}
+      <div className="flex-1 overflow-y-auto p-8">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex justify-between items-center mb-8">
+            <h2 className="text-3xl font-black uppercase tracking-tighter" style={{ color: theme.text }}>
+              {tabs.find(t => t.id === activeTab)?.label}
+            </h2>
+            <button
+              onClick={loadData}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl"
+              style={{ backgroundColor: theme.cardSecondary, color: theme.text }}
+            >
+              <RefreshCw size={18} />
+              Atualizar
+            </button>
+          </div>
+
+          {activeTab === 'overview' && renderOverview()}
+          {activeTab === 'users' && renderUsers()}
+          {activeTab === 'routines' && renderRoutines()}
+          {activeTab === 'exercises' && renderExercises()}
+          {activeTab === 'blog' && renderBlog()}
+          {activeTab === 'coupons' && renderCoupons()}
+          {activeTab === 'analytics' && renderAnalytics()}
+        </div>
+      </div>
+
+      {renderModal()}
     </div>
   );
 };

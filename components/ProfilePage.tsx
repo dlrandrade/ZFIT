@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   Settings, 
   ChevronRight, 
@@ -8,16 +7,17 @@ import {
   Bell, 
   HelpCircle, 
   LogOut, 
-  Award, 
   Zap, 
   Scale,
-  Ruler,
   TrendingUp,
   Save,
   Crown,
   Sparkles,
   RotateCcw,
-  X
+  X,
+  Camera,
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { Workout, User } from '../types';
 
@@ -35,6 +35,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
   const [name, setName] = useState(user?.name || '');
   const [weight, setWeight] = useState(user?.weight?.toString() || '');
   const [height, setHeight] = useState(user?.height?.toString() || '');
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isElite = user?.plan === 'Elite';
   const isPro = user?.plan === 'Pro';
@@ -66,6 +68,47 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
     setIsEditing(false);
   };
 
+  const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor, selecione uma imagem válida.');
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('A imagem deve ter no máximo 5MB.');
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+
+    try {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64 = reader.result as string;
+        onUpdateUser({
+          ...user,
+          avatar: base64
+        });
+        setIsUploadingPhoto(false);
+      };
+      reader.onerror = () => {
+        alert('Erro ao processar a imagem.');
+        setIsUploadingPhoto(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('Erro ao fazer upload:', error);
+      setIsUploadingPhoto(false);
+    }
+  };
+
+  const triggerPhotoUpload = () => {
+    fileInputRef.current?.click();
+  };
+
   const resetPlan = () => {
     if (!user) return;
     onUpdateUser({ ...user, plan: 'Free' });
@@ -82,43 +125,85 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
           PERFIL DO<br/>USUÁRIO
         </h2>
         <button 
-          onClick={() => isEditing ? setIsEditing(false) : setIsEditing(true)}
+          onClick={() => isEditing ? handleSaveProfile() : setIsEditing(true)}
           className="w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-95" 
           style={{ backgroundColor: isEditing ? theme.primary : theme.cardSecondary, borderColor: theme.border, color: isEditing ? (theme.name === 'ZFIT Mint' ? '#FFF' : '#000') : theme.text }}
         >
-          {isEditing ? <X size={22} /> : <Settings size={22} />}
+          {isEditing ? <Save size={22} /> : <Settings size={22} />}
         </button>
       </div>
+
+      <input 
+        type="file"
+        ref={fileInputRef}
+        onChange={handlePhotoUpload}
+        accept="image/*"
+        className="hidden"
+      />
 
       <div className="flex flex-col items-center mb-10 mt-4">
         <div className="relative mb-6">
           <div className="w-32 h-32 rounded-[40px] border-4 overflow-hidden shadow-2xl relative z-10 flex items-center justify-center" style={{ backgroundColor: theme.cardSecondary, borderColor: theme.card }}>
-            <img 
-              src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=ZFIT"} 
-              alt="Avatar" 
-              className="w-full h-full object-cover"
-            />
+            {isUploadingPhoto ? (
+              <Loader2 size={32} className="animate-spin" style={{ color: theme.primary }} />
+            ) : (
+              <img 
+                src={user?.avatar || "https://api.dicebear.com/7.x/avataaars/svg?seed=ZFIT"} 
+                alt="Avatar" 
+                className="w-full h-full object-cover"
+              />
+            )}
           </div>
           <div 
             className={`absolute -inset-4 blur-2xl opacity-10 pointer-events-none ${isElite ? 'opacity-30' : ''}`} 
             style={{ backgroundColor: theme.primary }} 
           />
-          <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg z-20 border-4" style={{ backgroundColor: theme.primary, borderColor: theme.bg, color: theme.name === 'ZFIT Mint' ? '#FFF' : '#000' }}>
-            {isElite ? <Crown size={18} fill="currentColor" strokeWidth={0} /> : <Zap size={18} fill="currentColor" strokeWidth={0} />}
-          </div>
+          
+          {isEditing ? (
+            <button 
+              onClick={triggerPhotoUpload}
+              disabled={isUploadingPhoto}
+              className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg z-20 border-4 transition-all active:scale-90 hover:scale-105"
+              style={{ backgroundColor: '#FFFFFF', borderColor: theme.bg, color: '#000000' }}
+              title="Alterar foto de perfil"
+            >
+              <Camera size={18} />
+            </button>
+          ) : (
+            <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg z-20 border-4" style={{ backgroundColor: theme.primary, borderColor: theme.bg, color: theme.name === 'ZFIT Mint' ? '#FFF' : '#000' }}>
+              {isElite ? <Crown size={18} fill="currentColor" strokeWidth={0} /> : <Zap size={18} fill="currentColor" strokeWidth={0} />}
+            </div>
+          )}
         </div>
         
         {isEditing ? (
-          <div className="w-full max-w-[240px] mb-4">
-             <span className="text-[8px] font-black uppercase opacity-20 block mb-1 text-center">Nome Público</span>
-             <input 
-               type="text" 
-               value={name} 
-               onChange={(e) => setName(e.target.value)}
-               className="bg-white/5 border border-white/10 rounded-xl w-full h-12 px-4 font-black text-center text-lg outline-none focus:border-primary uppercase tracking-tighter"
+          <div className="w-full max-w-[240px] mb-4 space-y-3">
+             <div>
+               <span className="text-[8px] font-black uppercase opacity-20 block mb-1 text-center">Nome Público</span>
+               <input 
+                 type="text" 
+                 value={name} 
+                 onChange={(e) => setName(e.target.value)}
+                 className="bg-white/5 border border-white/10 rounded-xl w-full h-12 px-4 font-black text-center text-lg outline-none focus:border-primary uppercase tracking-tighter"
+                 style={{ color: theme.text }}
+               />
+             </div>
+             <button
+               onClick={triggerPhotoUpload}
+               disabled={isUploadingPhoto}
+               className="w-full h-12 rounded-xl border border-dashed border-white/20 flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest opacity-60 hover:opacity-100 hover:border-white/40 transition-all"
                style={{ color: theme.text }}
-             />
-          </div>
+             >
+               {isUploadingPhoto ? (
+                 <Loader2 size={14} className="animate-spin" />
+               ) : (
+                 <>
+                   <Upload size={14} />
+                   Alterar Foto
+                 </>
+               )}
+             </button>
+           </div>
         ) : (
           <h2 className="text-3xl font-black tracking-tighter uppercase mb-1" style={{ color: theme.text }}>{user?.name || 'Atleta'}</h2>
         )}
@@ -133,7 +218,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
         </div>
       </div>
 
-      {/* Upgrade Banner or Premium Status Card */}
       {!isElite ? (
         <div 
           onClick={onOpenPricing}
@@ -155,9 +239,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
           </div>
         </div>
       ) : (
-        <div 
-          className="mb-8 p-6 rounded-[40px] border border-[#adf94e]/30 bg-[#adf94e]/5 relative overflow-hidden"
-        >
+        <div className="mb-8 p-6 rounded-[40px] border border-[#adf94e]/30 bg-[#adf94e]/5 relative overflow-hidden">
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-2xl bg-[#adf94e]/20 border border-[#adf94e]/30 flex items-center justify-center text-[#adf94e]">
                <Sparkles size={24} />
@@ -170,7 +252,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
         </div>
       )}
 
-      {/* Bio-Metrics Tracker */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div className="bg-[#111111] rounded-[35px] p-6 border transition-all duration-500" style={{ backgroundColor: theme.card, borderColor: theme.border, color: theme.text }}>
            <div className="flex justify-between items-center mb-6">
@@ -322,7 +403,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
       </div>
 
       <div className="text-center pb-8">
-        <p className="text-[8px] font-black uppercase tracking-[0.5em] opacity-10" style={{ color: theme.text }}>ZFIT PWA • Versão 2.6.0</p>
+        <p className="text-[8px] font-black uppercase tracking-[0.5em] opacity-10" style={{ color: theme.text }}>ZFIT PWA • Versão 2.6.1</p>
       </div>
     </div>
   );

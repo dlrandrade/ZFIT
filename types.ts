@@ -1,6 +1,3 @@
-
-import React from 'react';
-
 export interface WeightEntry {
   date: string;
   weight: number;
@@ -16,9 +13,10 @@ export interface User {
   email?: string;
   joinDate?: string;
   plan?: 'Free' | 'Pro' | 'Elite';
-  height?: number; // em cm
-  weight?: number; // em kg
+  height?: number;
+  weight?: number;
   weightHistory?: WeightEntry[];
+  created_at?: string;
 }
 
 export interface Coupon {
@@ -39,7 +37,10 @@ export interface BlogArticle {
   date: string;
   category: string;
   image: string;
-  readTime: string;
+  readTime?: string;
+  views?: number;
+  likes?: number;
+  shares?: number;
 }
 
 export interface ExerciseSet {
@@ -57,6 +58,34 @@ export interface Exercise {
   sets: ExerciseSet[];
 }
 
+export interface ExerciseCatalog {
+  id: string;
+  name: string;
+  muscle_group: string;
+  secondary_muscles?: string[];
+  equipment?: string;
+  difficulty?: string;
+  instructions?: string;
+  video_url?: string;
+  image_url?: string;
+  created_at?: string;
+}
+
+export interface PublicRoutine {
+  id: string;
+  title: string;
+  description?: string;
+  muscle_groups: string[];
+  difficulty: string;
+  duration_minutes: number;
+  exercises: Exercise[];
+  is_premium: boolean;
+  created_by?: string;
+  views: number;
+  uses: number;
+  created_at?: string;
+}
+
 export interface Workout {
   id: string;
   title: string;
@@ -64,13 +93,14 @@ export interface Workout {
   exercises: Exercise[];
   completedAt?: string;
   isPublic?: boolean;
+  user_id?: string;
 }
 
 export interface DailyStats {
   caloriesBurned: number;
-  waterIntake: number; // in ml
-  waterGoal: number; // in ml
-  workoutProgress: number; // 0 to 100
+  waterIntake: number;
+  waterGoal: number;
+  workoutProgress: number;
 }
 
 export interface Day {
@@ -92,4 +122,45 @@ export interface SocialPost {
   likes: number;
   commentsCount: number;
   hasLiked: boolean;
+}
+
+export interface ApiLog {
+  id: number;
+  user_id: string;
+  action: string;
+  endpoint?: string;
+  metadata?: Record<string, any>;
+  created_at: string;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  activeUsers: number;
+  totalWorkouts: number;
+  totalExercises: number;
+  totalRoutines: number;
+  totalArticles: number;
+  proSubscribers: number;
+  eliteSubscribers: number;
+  apiCallsToday: number;
+  apiCallsThisMonth: number;
+}
+
+export interface LeaderboardEntry {
+  user: User;
+  totalWorkouts: number;
+  totalVolume: number;
+  streak: number;
+}
+
+export interface ExerciseStats {
+  name: string;
+  uses: number;
+  muscleGroup: string;
+}
+
+export interface WorkoutStats {
+  title: string;
+  completions: number;
+  avgDuration: number;
 }
