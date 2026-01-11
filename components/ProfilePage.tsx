@@ -13,7 +13,10 @@ import {
   Scale,
   Ruler,
   TrendingUp,
-  Save
+  Save,
+  Crown,
+  Sparkles,
+  RotateCcw
 } from 'lucide-react';
 import { Workout, User } from '../types';
 
@@ -23,16 +26,20 @@ interface ProfilePageProps {
   history: Workout[];
   onLogout?: () => void;
   onUpdateUser: (userData: User) => void;
+  onOpenPricing?: () => void;
 }
 
-const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogout, onUpdateUser }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogout, onUpdateUser, onOpenPricing }) => {
   const [isEditingMetrics, setIsEditingMetrics] = useState(false);
   const [weight, setWeight] = useState(user?.weight?.toString() || '');
   const [height, setHeight] = useState(user?.height?.toString() || '');
 
+  const isElite = user?.plan === 'Elite';
+  const isPro = user?.plan === 'Pro';
+
   const settingsItems = [
     { icon: <ShieldCheck size={20} />, label: 'Privacidade e Segurança', subtitle: 'Gerencie seus dados e acesso' },
-    { icon: <CreditCard size={20} />, label: 'Assinatura ZFIT Pro', subtitle: user?.plan || 'Plano Gratuito' },
+    { icon: <CreditCard size={20} />, label: 'Minha Assinatura', subtitle: user?.plan || 'Plano Gratuito' },
     { icon: <Bell size={20} />, label: 'Notificações', subtitle: 'Configurações de alerta' },
     { icon: <HelpCircle size={20} />, label: 'Suporte', subtitle: 'Centro de ajuda' },
   ];
@@ -51,9 +58,14 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
       ...user,
       weight: !isNaN(newWeight) ? newWeight : user.weight,
       height: !isNaN(newHeight) ? newHeight : user.height,
-      weightHistory: newHistory.slice(-10) // Mantém os últimos 10 registros
+      weightHistory: newHistory.slice(-10) 
     });
     setIsEditingMetrics(false);
+  };
+
+  const resetPlan = () => {
+    if (!user) return;
+    onUpdateUser({ ...user, plan: 'Free' });
   };
 
   const totalWorkouts = history.length;
@@ -81,21 +93,61 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
             />
           </div>
           <div 
-            className="absolute -inset-4 blur-2xl opacity-10 pointer-events-none" 
+            className={`absolute -inset-4 blur-2xl opacity-10 pointer-events-none ${isElite ? 'opacity-30' : ''}`} 
             style={{ backgroundColor: theme.primary }} 
           />
           <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-2xl flex items-center justify-center shadow-lg z-20 border-4" style={{ backgroundColor: theme.primary, borderColor: theme.bg, color: theme.name === 'ZFIT Mint' ? '#FFF' : '#000' }}>
-            <Zap size={18} fill="currentColor" strokeWidth={0} />
+            {isElite ? <Crown size={18} fill="currentColor" strokeWidth={0} /> : <Zap size={18} fill="currentColor" strokeWidth={0} />}
           </div>
         </div>
         
         <h2 className="text-3xl font-black tracking-tighter uppercase mb-1" style={{ color: theme.text }}>{user?.name || 'Atleta'}</h2>
         <div className="flex items-center space-x-2 px-4 py-1.5 rounded-full border" style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border }}>
-          <span className="text-[10px] font-black uppercase tracking-widest" style={{ color: theme.primary }}>Membro {user?.plan || 'Free'}</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${isElite ? 'text-[#adf94e]' : ''}`} style={{ color: isElite ? undefined : theme.primary }}>
+            {isElite && <Sparkles size={10} />}
+            Membro {user?.plan || 'Free'}
+          </span>
           <div className="w-1 h-1 rounded-full" style={{ backgroundColor: theme.textSecondary }} />
           <span className="text-[10px] font-black uppercase tracking-widest opacity-40" style={{ color: theme.text }}>Lv. {currentLevel}</span>
         </div>
       </div>
+
+      {/* Upgrade Banner or Premium Status Card */}
+      {!isElite ? (
+        <div 
+          onClick={onOpenPricing}
+          className="mb-8 p-6 rounded-[40px] border relative overflow-hidden cursor-pointer group active:scale-[0.98] transition-all"
+          style={{ backgroundColor: `${theme.primary}10`, borderColor: `${theme.primary}30` }}
+        >
+          <div className="absolute -top-10 -right-10 w-32 h-32 bg-[#adf94e] opacity-20 blur-3xl group-hover:opacity-40 transition-opacity" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-[#adf94e] flex items-center justify-center text-black shadow-[0_10px_20px_rgba(173,249,78,0.3)]">
+                <Crown size={24} />
+              </div>
+              <div>
+                <h4 className="text-sm font-black uppercase tracking-tighter">{isPro ? 'Upgrade para Elite' : 'Seja Membro Elite'}</h4>
+                <p className="text-[9px] font-black uppercase opacity-40 tracking-widest">{isPro ? 'Libere consultoria e benefícios extras' : 'Libere todos os treinos agora'}</p>
+              </div>
+            </div>
+            <ChevronRight size={20} className="text-[#adf94e]" />
+          </div>
+        </div>
+      ) : (
+        <div 
+          className="mb-8 p-6 rounded-[40px] border border-[#adf94e]/30 bg-[#adf94e]/5 relative overflow-hidden"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-[#adf94e]/20 border border-[#adf94e]/30 flex items-center justify-center text-[#adf94e]">
+               <Sparkles size={24} />
+            </div>
+            <div>
+              <h4 className="text-sm font-black uppercase tracking-tighter text-white">Você é Elite</h4>
+              <p className="text-[9px] font-black uppercase opacity-40 tracking-widest text-[#adf94e]">Acesso total desbloqueado</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Bio-Metrics Tracker */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -182,6 +234,24 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
       </div>
 
       <div className="space-y-3 mb-12">
+        {(isElite || isPro) && (
+          <button 
+            onClick={resetPlan}
+            className="w-full h-20 px-6 rounded-[35px] border border-dashed border-white/10 flex items-center justify-between group active:scale-[0.98] transition-all bg-white/[0.02]"
+            style={{ color: theme.text }}
+          >
+            <div className="flex items-center space-x-4">
+              <div className="w-11 h-11 rounded-2xl flex items-center justify-center bg-white/5 text-white/40">
+                <RotateCcw size={20} />
+              </div>
+              <div className="text-left">
+                <h4 className="font-black uppercase text-xs tracking-tighter">Resetar para Plano Free</h4>
+                <p className="text-[9px] font-black opacity-30 uppercase tracking-widest mt-0.5">Apenas para fins de teste</p>
+              </div>
+            </div>
+          </button>
+        )}
+        
         {settingsItems.map((item, i) => (
           <button 
             key={i} 

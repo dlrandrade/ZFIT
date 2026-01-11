@@ -14,7 +14,6 @@ class DatabaseService {
         this._supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       } catch (e) {
         console.error("ZFIT: Falha crítica ao criar cliente Supabase", e);
-        // Retorna um cliente "dummy" ou relança para tratamento no App
         throw e;
       }
     }
@@ -63,13 +62,32 @@ class DatabaseService {
     localStorage.removeItem('zfit_user');
   }
 
-  async getCurrentUser(): Promise<User | null> {
+  async refreshUser(): Promise<User | null> {
     const saved = localStorage.getItem('zfit_user');
     if (!saved) return null;
     try {
       const user = JSON.parse(saved);
-      const { data: profile } = await this.client.from('profiles').select('*').eq('id', user.id).maybeSingle();
-      return (profile as User) || user;
+      const { data: profile, error } = await this.client
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .maybeSingle();
+      
+      if (profile) {
+        localStorage.setItem('zfit_user', JSON.stringify(profile));
+        return profile as User;
+      }
+      return user;
+    } catch {
+      return null;
+    }
+  }
+
+  async getCurrentUser(): Promise<User | null> {
+    const saved = localStorage.getItem('zfit_user');
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
     } catch {
       return null;
     }
