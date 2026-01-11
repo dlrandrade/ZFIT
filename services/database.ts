@@ -2,8 +2,22 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { User, Workout, SocialPost, DailyStats, BlogArticle, Coupon } from '../types';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://jtbxdkoxwwnfnbclemmp.supabase.co';
-const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_89f07kq5B_i6ISCsldkJWQ_SPa2UFM_';
+// Acesso seguro às variáveis de ambiente
+const getEnv = (key: string, fallback: string) => {
+  try {
+    // @ts-ignore
+    if (typeof process !== 'undefined' && process.env && process.env[key]) {
+      // @ts-ignore
+      return process.env[key];
+    }
+    return fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+const SUPABASE_URL = getEnv('VITE_SUPABASE_URL', 'https://jtbxdkoxwwnfnbclemmp.supabase.co');
+const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY', 'sb_publishable_89f07kq5B_i6ISCsldkJWQ_SPa2UFM_');
 
 class DatabaseService {
   public supabase: SupabaseClient;
@@ -12,7 +26,6 @@ class DatabaseService {
     this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
 
-  // --- LOGIN ---
   async login(email: string): Promise<User> {
     const emailNormalized = email.toLowerCase().trim();
     const { data: user, error } = await this.supabase
@@ -29,7 +42,6 @@ class DatabaseService {
     return user as User;
   }
 
-  // --- CADASTRO ---
   async signUp(name: string, email: string): Promise<User> {
     const emailNormalized = email.toLowerCase().trim();
     
@@ -71,13 +83,17 @@ class DatabaseService {
   async getCurrentUser(): Promise<User | null> {
     const saved = localStorage.getItem('zfit_user');
     if (!saved) return null;
-    const user = JSON.parse(saved);
-    const { data: profile } = await this.supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    if (profile) {
-      localStorage.setItem('zfit_user', JSON.stringify(profile));
-      return profile as User;
+    try {
+      const user = JSON.parse(saved);
+      const { data: profile } = await this.supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      if (profile) {
+        localStorage.setItem('zfit_user', JSON.stringify(profile));
+        return profile as User;
+      }
+      return user;
+    } catch {
+      return null;
     }
-    return user;
   }
 
   async saveUser(user: User): Promise<void> {
@@ -150,7 +166,7 @@ class DatabaseService {
     if (!user) return defaultStats;
 
     const today = new Date().toISOString().split('T')[0];
-    const { data, error } = await this.supabase
+    const { data } = await this.supabase
       .from('daily_stats')
       .select('*')
       .eq('user_id', user.id)

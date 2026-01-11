@@ -13,8 +13,6 @@ interface FeedCardProps {
 
 const FeedCard: React.FC<FeedCardProps> = ({ post, primaryColor, onLike, theme, index }) => {
   const [isVisible, setIsVisible] = useState(false);
-  const [isTopShareHovered, setIsTopShareHovered] = useState(false);
-  const [isBottomShareHovered, setIsBottomShareHovered] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   
   const isMint = theme.name === 'ZFIT Mint';
@@ -28,185 +26,97 @@ const FeedCard: React.FC<FeedCardProps> = ({ post, primaryColor, onLike, theme, 
           observer.unobserve(entry.target);
         }
       },
-      { 
-        threshold: 0.05, 
-        rootMargin: '20px' 
-      }
+      { threshold: 0.05 }
     );
 
-    if (cardRef.current) {
-      observer.observe(cardRef.current);
-    }
-
-    return () => {
-      if (cardRef.current) {
-        observer.unobserve(cardRef.current);
-      }
-    };
+    if (cardRef.current) observer.observe(cardRef.current);
+    return () => observer.disconnect();
   }, []);
 
   const handleShare = async () => {
     const shareData = {
-      title: 'ZFIT | Evolução no Treino',
-      text: `🔥 Olha esse treino de ${post.user.name}! 
-Sessão: ${post.workoutTitle}
-Queima: ${post.calories}
-Intensidade: ${post.intensity}%
-Treine com elite no ZFIT.`,
+      title: 'ZFIT Elite',
+      text: `🔥 Olha o treino de ${post.user.name}: ${post.workoutTitle}!`,
       url: window.location.href,
     };
-
-    if (navigator.share) {
-      try {
-        await navigator.share(shareData);
-      } catch (err) {
-        console.debug('Compartilhamento cancelado ou falhou', err);
-      }
-    } else {
-      try {
-        await navigator.clipboard.writeText(`${shareData.text} - ${shareData.url}`);
-        alert('Resumo do treino copiado! Agora você pode colar onde quiser.');
-      } catch (err) {
-        alert('Não foi possível compartilhar no momento.');
-      }
-    }
+    if (navigator.share) await navigator.share(shareData);
   };
 
   return (
     <div 
       ref={cardRef}
-      className={`rounded-[40px] border mb-6 overflow-hidden transition-all duration-500 ease-out cursor-pointer ${depthClass} 
-        ${isVisible ? 'animate-reveal' : 'opacity-0 translate-y-[40px] scale-[0.98] blur-[4px]'} 
-        hover:scale-[1.015] hover:opacity-100 opacity-90 hover:shadow-2xl active:scale-[0.99] group`}
+      className={`rounded-[40px] border mb-6 overflow-hidden transition-all duration-500 ease-out ${depthClass} 
+        ${isVisible ? 'animate-reveal' : 'opacity-0 translate-y-8'}`}
       style={{ 
         backgroundColor: theme.card, 
         borderColor: theme.border, 
         color: theme.text,
-        animationDelay: `${Math.min(index * 60, 400)}ms` 
+        animationDelay: `${index * 50}ms` 
       }}
     >
-      {/* Header */}
+      {/* User Header */}
       <div className="flex justify-between items-center p-6">
         <div className="flex items-center space-x-3">
-          <div className="relative">
-            <img src={post.user.avatar} className="w-10 h-10 rounded-full border-2 border-white/10 object-cover" alt={post.user.name} />
-            <div className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-[#adf94e] border-2 border-[#111111] flex items-center justify-center">
-               <span className="text-[6px] font-black text-black">LV</span>
-            </div>
-          </div>
+          <img src={post.user.avatar} className="w-10 h-10 rounded-full border border-white/10" alt="" />
           <div>
-            <h4 className="text-sm font-black tracking-tight uppercase">{post.user.name}</h4>
-            <p className="text-[9px] font-black opacity-30 uppercase tracking-[0.2em]">{post.timestamp}</p>
+            <h4 className="text-sm font-black uppercase tracking-tight">{post.user.name}</h4>
+            <p className="text-[9px] font-black opacity-30 uppercase tracking-widest">{post.timestamp}</p>
           </div>
         </div>
-        
-        <button 
-          onClick={(e) => { e.stopPropagation(); handleShare(); }}
-          onMouseEnter={() => setIsTopShareHovered(true)}
-          onMouseLeave={() => setIsTopShareHovered(false)}
-          className="bg-white/5 w-11 h-11 rounded-2xl border border-white/5 active:scale-90 hover:bg-white/10 transition-all flex items-center justify-center shadow-lg"
-        >
-           <Share2 
-            size={18} 
-            className={`transition-all duration-300 ${isTopShareHovered ? 'scale-110 opacity-100' : 'opacity-60'}`} 
-            style={{ color: isTopShareHovered ? primaryColor : 'inherit' }}
-           />
+        <button onClick={handleShare} className="w-10 h-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center opacity-40 hover:opacity-100 transition-opacity">
+          <Share2 size={16} />
         </button>
       </div>
 
-      {/* Post Content */}
+      {/* Stats Summary */}
       <div className="px-6 pb-2">
-        <div className="rounded-[35px] p-6 mb-4 border relative overflow-hidden bg-white/[0.02] transition-colors group-hover:bg-white/[0.04]" style={{ borderColor: theme.border }}>
-          <div className="flex justify-between items-start mb-6">
-             <div>
-                <span className="text-[9px] font-black uppercase tracking-[0.3em] opacity-30 block mb-1">Resumo da Sessão</span>
-                <h3 className="text-2xl font-black tracking-tighter leading-tight uppercase">{post.workoutTitle}</h3>
-             </div>
-             <div className="w-11 h-11 rounded-2xl flex items-center justify-center border transition-transform group-hover:rotate-12" style={{ backgroundColor: `${primaryColor}10`, borderColor: theme.border }}>
-                <Zap size={20} style={{ color: primaryColor }} />
-             </div>
+        <div className="rounded-[30px] p-6 mb-4 border bg-white/[0.02] flex justify-between items-center" style={{ borderColor: theme.border }}>
+          <div>
+            <span className="text-[9px] font-black uppercase tracking-widest opacity-30 block mb-1">Workout</span>
+            <h3 className="text-xl font-black uppercase tracking-tighter leading-tight">{post.workoutTitle}</h3>
           </div>
-
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex space-x-4">
-              <div className="flex items-center space-x-1.5">
-                <Flame size={14} style={{ color: primaryColor }} />
-                <span className="text-sm font-black tracking-tighter uppercase">{post.calories}</span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <Clock size={14} style={{ color: primaryColor }} />
-                <span className="text-sm font-black tracking-tighter uppercase">{post.duration}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <span className="text-xl font-black tracking-tighter leading-none" style={{ color: primaryColor }}>{post.intensity}%</span>
-            </div>
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center border" style={{ backgroundColor: `${primaryColor}15`, borderColor: theme.border }}>
+            <Zap size={18} style={{ color: primaryColor }} />
           </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between px-6 py-5 bg-white/[0.01]">
-        <div className="flex items-center space-x-6">
-          <button 
-            onClick={(e) => { e.stopPropagation(); onLike(); }}
-            className="flex items-center space-x-2 group/like transition-all duration-300"
-          >
-            <div className="relative">
-              <Heart 
-                size={22} 
-                className={`transition-all duration-500 ${
-                  post.hasLiked 
-                    ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse drop-shadow-[0_0_10px_rgba(255,45,85,0.6)]' 
-                    : 'opacity-30 scale-100 hover:opacity-100 text-white'
-                }`} 
-              />
-              {post.hasLiked && (
-                <div className="absolute inset-0 bg-[#FF2D55] blur-[15px] rounded-full opacity-20 animate-pulse" />
-              )}
-            </div>
-            <span className={`text-xs font-black transition-colors ${post.hasLiked ? 'text-[#FF2D55]' : 'opacity-30'}`}>
-              {post.likes}
-            </span>
-          </button>
-          
-          <button 
-            onClick={(e) => e.stopPropagation()}
-            className="flex items-center space-x-2 opacity-30 group/comment active:scale-110 transition-transform hover:opacity-100"
-          >
-            <MessageCircle size={20} />
-            <span className="text-xs font-black">{post.commentsCount}</span>
-          </button>
-
-          <button 
-            onClick={(e) => { e.stopPropagation(); handleShare(); }}
-            onMouseEnter={() => setIsBottomShareHovered(true)}
-            onMouseLeave={() => setIsBottomShareHovered(false)}
-            className="flex items-center space-x-2 opacity-30 active:scale-110 transition-transform hover:opacity-100"
-          >
-            <Share2 
-              size={20} 
-              className={`transition-all duration-300 ${isBottomShareHovered ? 'scale-125' : ''}`} 
-              style={{ color: isBottomShareHovered ? primaryColor : 'inherit' }}
+      {/* Action Area */}
+      <div className="flex items-center space-x-6 px-8 py-5 bg-white/[0.01]">
+        <button 
+          onClick={onLike}
+          className="flex items-center space-x-2 group transition-all"
+        >
+          <div className="relative">
+            <Heart 
+              size={22} 
+              className={`transition-all duration-500 ease-out ${
+                post.hasLiked 
+                  ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse drop-shadow-[0_0_8px_rgba(255,45,85,0.4)]' 
+                  : 'text-white/30 hover:text-white'
+              }`} 
             />
-            <span 
-              className="text-xs font-black uppercase tracking-tighter" 
-              style={{ color: isBottomShareHovered ? primaryColor : 'inherit' }}
-            >
-              Compartilhar
-            </span>
-          </button>
-        </div>
+            {post.hasLiked && (
+              <div className="absolute inset-0 bg-[#FF2D55] blur-xl opacity-10 rounded-full animate-pulse" />
+            )}
+          </div>
+          <span className={`text-xs font-black transition-colors ${post.hasLiked ? 'text-[#FF2D55]' : 'text-white/30'}`}>
+            {post.likes}
+          </span>
+        </button>
         
-        <div className="hidden sm:flex -space-x-2">
-           {[1, 2, 3].map(i => (
-             <img 
-               key={i} 
-               src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 20}`} 
-               className="w-7 h-7 rounded-full border-2 border-[#111111] bg-gray-900" 
-               alt="" 
-             />
-           ))}
+        <button className="flex items-center space-x-2 text-white/30 hover:text-white transition-all">
+          <MessageCircle size={20} />
+          <span className="text-xs font-black">{post.commentsCount}</span>
+        </button>
+
+        <div className="flex-1" />
+
+        <div className="flex items-center space-x-4 opacity-40">
+           <div className="flex items-center space-x-1">
+             <Flame size={12} style={{ color: primaryColor }} />
+             <span className="text-[10px] font-black">{post.calories}</span>
+           </div>
         </div>
       </div>
     </div>
