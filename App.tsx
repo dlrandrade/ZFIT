@@ -16,17 +16,23 @@ import StartWorkoutDrawer from './components/StartWorkoutDrawer';
 import WorkoutExecution from './components/WorkoutExecution';
 import CreateWorkout from './components/CreateWorkout';
 import RoutinesPage from './components/RoutinesPage';
-import { ArrowRight, BookOpen } from 'lucide-react';
+import { ArrowRight, BookOpen, AlertCircle } from 'lucide-react';
 import { THEMES, INITIAL_DAILY_STATS, getCalendarDays, MOCK_BLOG } from './constants';
 import { DailyStats, Workout, Exercise, SocialPost, User, BlogArticle } from './types';
 import { db } from './services/database';
 
 const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem('zfit_auth') === 'true';
+    try {
+      return localStorage.getItem('zfit_auth') === 'true';
+    } catch {
+      return false;
+    }
   });
+  
   const [user, setUser] = useState<User | null>(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
+  const [initError, setInitError] = useState<string | null>(null);
 
   const [currentTheme, setCurrentTheme] = useState<'dark' | 'mint'>('dark');
   const [currentPage, setCurrentPage] = useState<'home' | 'feed' | 'stats' | 'profile' | 'executing' | 'creating' | 'admin' | 'blog' | 'routines'>('home');
@@ -41,23 +47,24 @@ const App: React.FC = () => {
   
   const [calendarDays] = useState(getCalendarDays());
 
-  // Carregar dados do usuário logado
+  // Carregar dados do usuário logado de forma resiliente
   useEffect(() => {
     const initApp = async () => {
-      if (isAuthenticated) {
-        try {
+      try {
+        if (isAuthenticated) {
           const currentUser = await db.getCurrentUser();
           if (currentUser) {
             setUser(currentUser);
-            setIsAuthenticated(true);
           } else {
             setIsAuthenticated(false);
           }
-        } catch (e) {
-          console.error("Erro na inicialização:", e);
         }
+      } catch (e: any) {
+        console.error("Falha ao inicializar App:", e);
+        setInitError("Falha na conexão com o servidor. Verifique sua rede.");
+      } finally {
+        setLoadingAuth(false);
       }
-      setLoadingAuth(false);
     };
     initApp();
   }, [isAuthenticated]);
@@ -67,15 +74,17 @@ const App: React.FC = () => {
     const loadData = async () => {
       if (isAuthenticated && user) {
         try {
-          const history = await db.getWorkoutHistory();
-          const feed = await db.getSocialFeed();
-          const stats = await db.getDailyStats();
-          const articles = await db.getBlogArticles();
+          const [history, feed, stats, articles] = await Promise.allSettled([
+            db.getWorkoutHistory(),
+            db.getSocialFeed(),
+            db.getDailyStats(),
+            db.getBlogArticles()
+          ]);
           
-          setWorkoutHistory(history);
-          setSocialFeed(feed);
-          setDailyStats(stats || INITIAL_DAILY_STATS);
-          if (articles.length > 0) setBlogArticles(articles);
+          if (history.status === 'fulfilled') setWorkoutHistory(history.value);
+          if (feed.status === 'fulfilled') setSocialFeed(feed.value);
+          if (stats.status === 'fulfilled') setDailyStats(stats.value || INITIAL_DAILY_STATS);
+          if (articles.status === 'fulfilled' && articles.value.length > 0) setBlogArticles(articles.value);
           
           const savedRoutines = localStorage.getItem('zfit_user_routines');
           if (savedRoutines) setUserRoutines(JSON.parse(savedRoutines));
@@ -83,20 +92,25 @@ const App: React.FC = () => {
           const savedActive = localStorage.getItem('zfit_active_workout');
           if (savedActive) setActiveWorkout(JSON.parse(savedActive));
         } catch (e) {
-          console.error("Erro ao carregar dados:", e);
+          console.warn("Alguns dados não puderam ser carregados:", e);
         }
       }
     };
     loadData();
   }, [isAuthenticated, user]);
 
-  // Sincronização de efeitos
+  // Sincronização de efeitos (debounce implícito para não sobrecarregar o banco)
   useEffect(() => {
     if (isAuthenticated && user) {
-      db.updateDailyStats(dailyStats);
+      const timer = setTimeout(() => {
+        db.updateDailyStats(dailyStats).catch(console.warn);
+      }, 1000);
+      
       if (activeWorkout) localStorage.setItem('zfit_active_workout', JSON.stringify(activeWorkout));
       else localStorage.removeItem('zfit_active_workout');
+      
       localStorage.setItem('zfit_user_routines', JSON.stringify(userRoutines));
+      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, dailyStats, activeWorkout, userRoutines, user]);
 
@@ -118,6 +132,24 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-[#050505] flex items-center justify-center">
         <div className="w-12 h-12 border-4 border-[#adf94e]/20 border-t-[#adf94e] rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (initError) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 text-center space-y-6">
+        <AlertCircle size={48} className="text-red-500 opacity-50" />
+        <div className="space-y-2">
+          <h2 className="text-xl font-black uppercase">ERRO DE CARREGAMENTO</h2>
+          <p className="text-sm opacity-40 font-medium max-w-xs">{initError}</p>
+        </div>
+        <button 
+          onClick={() => window.location.reload()}
+          className="px-8 h-14 bg-white/5 rounded-2xl border border-white/10 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all"
+        >
+          Tentar Novamente
+        </button>
       </div>
     );
   }
@@ -163,7 +195,6 @@ const App: React.FC = () => {
       setDailyStats(newStats);
       await db.updateDailyStats(newStats);
 
-      // Atualizar XP do usuário
       const updatedUser = { ...user, xp: (user.xp || 0) + 150 };
       setUser(updatedUser);
       await db.saveUser(updatedUser);
@@ -180,7 +211,7 @@ const App: React.FC = () => {
         commentsCount: 0,
         hasLiked: false
       };
-      await db.publishPost(newPost);
+      await db.publishPost(newPost).catch(console.warn);
       setSocialFeed(prev => [newPost, ...prev]);
 
       setActiveWorkout(null);
@@ -199,7 +230,6 @@ const App: React.FC = () => {
     const isMint = theme.name === 'ZFIT Mint';
     const depthClass = isMint ? 'premium-depth-light' : 'premium-depth-dark';
     
-    // Fallbacks para evitar NaN e undefined
     const progress = dailyStats?.workoutProgress ?? 0;
     const waterIntake = dailyStats?.waterIntake ?? 0;
     const waterGoal = dailyStats?.waterGoal ?? 3000;

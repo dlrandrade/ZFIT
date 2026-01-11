@@ -76,13 +76,13 @@ Treine com elite no ZFIT.`,
     <div 
       ref={cardRef}
       className={`rounded-[40px] border mb-6 overflow-hidden transition-all duration-500 ease-out cursor-pointer ${depthClass} 
-        ${isVisible ? 'animate-reveal' : 'opacity-0 translate-y-[60px] scale-[0.96] blur-[8px]'} 
+        ${isVisible ? 'animate-reveal' : 'opacity-0 translate-y-[40px] scale-[0.98] blur-[4px]'} 
         hover:scale-[1.015] hover:opacity-100 opacity-90 hover:shadow-2xl active:scale-[0.99] group`}
       style={{ 
         backgroundColor: theme.card, 
         borderColor: theme.border, 
         color: theme.text,
-        animationDelay: `${Math.min(index * 80, 480)}ms` 
+        animationDelay: `${Math.min(index * 60, 400)}ms` 
       }}
     >
       {/* Header */}
@@ -100,13 +100,11 @@ Treine com elite no ZFIT.`,
           </div>
         </div>
         
-        {/* Botão de Compartilhar Superior - Agora visível em todos os tamanhos */}
         <button 
           onClick={(e) => { e.stopPropagation(); handleShare(); }}
           onMouseEnter={() => setIsTopShareHovered(true)}
           onMouseLeave={() => setIsTopShareHovered(false)}
           className="bg-white/5 w-11 h-11 rounded-2xl border border-white/5 active:scale-90 hover:bg-white/10 transition-all flex items-center justify-center shadow-lg"
-          title="Compartilhar Treino"
         >
            <Share2 
             size={18} 
@@ -144,16 +142,6 @@ Treine com elite no ZFIT.`,
               <span className="text-xl font-black tracking-tighter leading-none" style={{ color: primaryColor }}>{post.intensity}%</span>
             </div>
           </div>
-
-          <div className="flex items-end space-x-1 h-6 opacity-10">
-            {Array.from({ length: 24 }).map((_, i) => (
-              <div 
-                key={i} 
-                style={{ height: `${20 + Math.random() * 80}%`, backgroundColor: primaryColor }} 
-                className="flex-1 rounded-full" 
-              />
-            ))}
-          </div>
         </div>
       </div>
 
@@ -162,23 +150,22 @@ Treine com elite no ZFIT.`,
         <div className="flex items-center space-x-6">
           <button 
             onClick={(e) => { e.stopPropagation(); onLike(); }}
-            className="flex items-center space-x-2 group/like transition-all duration-300 relative"
+            className="flex items-center space-x-2 group/like transition-all duration-300"
           >
-            <div className="relative flex items-center justify-center">
+            <div className="relative">
               <Heart 
-                key={post.hasLiked ? 'liked' : 'unliked'}
                 size={22} 
-                className={`transition-all duration-500 ease-out filter ${
+                className={`transition-all duration-500 ${
                   post.hasLiked 
-                    ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse drop-shadow-[0_0_8px_rgba(255,45,85,0.4)]' 
-                    : 'opacity-30 scale-100 hover:opacity-50 text-white fill-none'
+                    ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse drop-shadow-[0_0_10px_rgba(255,45,85,0.6)]' 
+                    : 'opacity-30 scale-100 hover:opacity-100 text-white'
                 }`} 
               />
               {post.hasLiked && (
-                <div className="absolute inset-0 animate-ping opacity-20 rounded-full bg-[#FF2D55] scale-150 pointer-events-none" />
+                <div className="absolute inset-0 bg-[#FF2D55] blur-[15px] rounded-full opacity-20 animate-pulse" />
               )}
             </div>
-            <span className={`text-xs font-black transition-all duration-300 ${post.hasLiked ? 'text-[#FF2D55] translate-x-1' : 'opacity-30'}`}>
+            <span className={`text-xs font-black transition-colors ${post.hasLiked ? 'text-[#FF2D55]' : 'opacity-30'}`}>
               {post.likes}
             </span>
           </button>
@@ -188,7 +175,7 @@ Treine com elite no ZFIT.`,
             className="flex items-center space-x-2 opacity-30 group/comment active:scale-110 transition-transform hover:opacity-100"
           >
             <MessageCircle size={20} />
-            <span className="text-xs font-black" style={{ color: theme.text }}>{post.commentsCount}</span>
+            <span className="text-xs font-black">{post.commentsCount}</span>
           </button>
 
           <button 
@@ -203,8 +190,8 @@ Treine com elite no ZFIT.`,
               style={{ color: isBottomShareHovered ? primaryColor : 'inherit' }}
             />
             <span 
-              className={`text-xs font-black uppercase tracking-tighter transition-colors duration-300`} 
-              style={{ color: isBottomShareHovered ? primaryColor : theme.text, opacity: isBottomShareHovered ? 1 : 1 }}
+              className="text-xs font-black uppercase tracking-tighter" 
+              style={{ color: isBottomShareHovered ? primaryColor : 'inherit' }}
             >
               Compartilhar
             </span>
@@ -216,8 +203,8 @@ Treine com elite no ZFIT.`,
              <img 
                key={i} 
                src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${i + 20}`} 
-               className="w-7 h-7 rounded-full border-2 border-[#111111] bg-gray-900 object-cover" 
-               alt="amigo" 
+               className="w-7 h-7 rounded-full border-2 border-[#111111] bg-gray-900" 
+               alt="" 
              />
            ))}
         </div>
