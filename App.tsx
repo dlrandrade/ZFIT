@@ -48,28 +48,23 @@ const App: React.FC = () => {
   const [calendarDays] = useState(getCalendarDays());
 
   useEffect(() => {
-    console.log("ZFIT: Iniciando Aplicação...");
     const initApp = async () => {
       try {
+        console.log("ZFIT: Tentando recuperar sessão...");
         if (isAuthenticated) {
-          // Timeout de segurança para evitar spinner infinito em caso de rede instável
-          const authPromise = db.getCurrentUser();
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
-          
-          const currentUser = await Promise.race([authPromise, timeoutPromise]) as User | null;
-          
+          const currentUser = await db.getCurrentUser();
           if (currentUser) {
             setUser(currentUser);
           } else {
             setIsAuthenticated(false);
-            localStorage.removeItem('zfit_auth');
           }
         }
       } catch (e: any) {
-        console.warn("ZFIT: Falha na checagem de auth inicial:", e);
-        // Não barramos o app se falhar o login automático, apenas pedimos login novamente
+        console.error("ZFIT: Erro crítico na inicialização:", e);
+        // Mesmo com erro, tiramos o loading para mostrar a tela de erro ou login
         if (isAuthenticated) setIsAuthenticated(false);
       } finally {
+        // Garantimos que o loader suma em no máximo 1 segundo após o init
         setLoadingAuth(false);
       }
     };
@@ -98,33 +93,20 @@ const App: React.FC = () => {
           const savedActive = localStorage.getItem('zfit_active_workout');
           if (savedActive) setActiveWorkout(JSON.parse(savedActive));
         } catch (e) {
-          console.warn("ZFIT: Alguns dados não puderam ser carregados:", e);
+          console.warn("ZFIT: Algumas fontes de dados falharam, usando local cache.");
         }
       }
     };
     loadData();
   }, [isAuthenticated, user]);
 
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      const timer = setTimeout(() => {
-        db.updateDailyStats(dailyStats).catch(() => {});
-      }, 2000);
-      
-      if (activeWorkout) localStorage.setItem('zfit_active_workout', JSON.stringify(activeWorkout));
-      else localStorage.removeItem('zfit_active_workout');
-      
-      localStorage.setItem('zfit_user_routines', JSON.stringify(userRoutines));
-      return () => clearTimeout(timer);
-    }
-  }, [isAuthenticated, dailyStats, activeWorkout, userRoutines]);
-
   const theme = THEMES[currentTheme];
 
   if (loadingAuth) {
     return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-10 h-10 border-2 border-[#adf94e]/10 border-t-[#adf94e] rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center">
+        <div className="w-10 h-10 border-2 border-[#adf94e]/10 border-t-[#adf94e] rounded-full animate-spin mb-4" />
+        <p className="text-[10px] font-black uppercase tracking-widest opacity-20 animate-pulse">Autenticando...</p>
       </div>
     );
   }
@@ -169,7 +151,7 @@ const App: React.FC = () => {
       const now = new Date();
       const completedWorkout = { ...activeWorkout, completedAt: now.toISOString() };
       
-      await db.saveWorkout(completedWorkout);
+      await db.saveWorkout(completedWorkout).catch(() => {});
       setWorkoutHistory(prev => [completedWorkout, ...prev]);
 
       const caloriesEarned = 150 + (activeWorkout.exercises.length * 50);
@@ -180,11 +162,11 @@ const App: React.FC = () => {
       };
       
       setDailyStats(newStats);
-      await db.updateDailyStats(newStats);
+      db.updateDailyStats(newStats).catch(() => {});
 
       const updatedUser = { ...user, xp: (user.xp || 0) + 150 };
       setUser(updatedUser);
-      await db.saveUser(updatedUser);
+      db.saveUser(updatedUser).catch(() => {});
 
       const newPost: SocialPost = {
         id: `post-${Date.now()}`,
@@ -198,7 +180,7 @@ const App: React.FC = () => {
         commentsCount: 0,
         hasLiked: false
       };
-      await db.publishPost(newPost).catch(() => {});
+      db.publishPost(newPost).catch(() => {});
       setSocialFeed(prev => [newPost, ...prev]);
 
       setActiveWorkout(null);

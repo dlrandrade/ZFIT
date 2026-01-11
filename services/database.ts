@@ -2,21 +2,27 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { User, Workout, SocialPost, DailyStats, BlogArticle, Coupon } from '../types';
 
-// Em ambientes ESM puros, process.env causa erro de referência.
-// Usamos strings diretas para o cliente não quebrar no Vercel/Netlify.
 const SUPABASE_URL = 'https://jtbxdkoxwwnfnbclemmp.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_89f07kq5B_i6ISCsldkJWQ_SPa2UFM_';
 
 class DatabaseService {
-  public supabase: SupabaseClient;
+  private _supabase: SupabaseClient | null = null;
 
-  constructor() {
-    this.supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  private get client(): SupabaseClient {
+    if (!this._supabase) {
+      this._supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true
+        }
+      });
+    }
+    return this._supabase;
   }
 
   async login(email: string): Promise<User> {
     const emailNormalized = email.toLowerCase().trim();
-    const { data: user, error } = await this.supabase
+    const { data: user, error } = await this.client
       .from('profiles')
       .select('*')
       .eq('email', emailNormalized)
@@ -33,7 +39,7 @@ class DatabaseService {
   async signUp(name: string, email: string): Promise<User> {
     const emailNormalized = email.toLowerCase().trim();
     
-    const { data: existing } = await this.supabase
+    const { data: existing } = await this.client
       .from('profiles')
       .select('email')
       .eq('email', emailNormalized)
@@ -52,7 +58,7 @@ class DatabaseService {
       plan: 'Free'
     };
 
-    const { error: insertError } = await this.supabase
+    const { error: insertError } = await this.client
       .from('profiles')
       .insert(newUser);
 
@@ -73,7 +79,7 @@ class DatabaseService {
     if (!saved) return null;
     try {
       const user = JSON.parse(saved);
-      const { data: profile } = await this.supabase.from('profiles').select('*').eq('id', user.id).maybeSingle();
+      const { data: profile } = await this.client.from('profiles').select('*').eq('id', user.id).maybeSingle();
       if (profile) {
         localStorage.setItem('zfit_user', JSON.stringify(profile));
         return profile as User;
@@ -86,13 +92,13 @@ class DatabaseService {
 
   async saveUser(user: User): Promise<void> {
     localStorage.setItem('zfit_user', JSON.stringify(user));
-    await this.supabase.from('profiles').upsert(user);
+    await this.client.from('profiles').upsert(user);
   }
 
   async getWorkoutHistory(): Promise<Workout[]> {
     const user = await this.getCurrentUser();
     if (!user) return [];
-    const { data } = await this.supabase
+    const { data } = await this.client
       .from('workouts')
       .select('*')
       .eq('user_id', user.id)
@@ -108,7 +114,7 @@ class DatabaseService {
   async saveWorkout(workout: Workout): Promise<void> {
     const user = await this.getCurrentUser();
     if (!user) return;
-    await this.supabase.from('workouts').insert({
+    await this.client.from('workouts').insert({
       id: workout.id,
       user_id: user.id,
       title: workout.title,
@@ -119,25 +125,30 @@ class DatabaseService {
   }
 
   async getSocialFeed(): Promise<SocialPost[]> {
-    const { data } = await this.supabase
-      .from('social_posts')
-      .select('*, user:profiles(*)')
-      .order('created_at', { ascending: false });
+    try {
+      const { data } = await this.client
+        .from('social_posts')
+        .select('*, user:profiles(*)')
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-    return (data || []).map((p: any) => ({
-      ...p,
-      workoutTitle: p.workout_title,
-      timestamp: new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      likes: p.likes || 0,
-      commentsCount: p.comments_count || 0,
-      hasLiked: false
-    }));
+      return (data || []).map((p: any) => ({
+        ...p,
+        workoutTitle: p.workout_title,
+        timestamp: new Date(p.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        likes: p.likes || 0,
+        commentsCount: p.comments_count || 0,
+        hasLiked: false
+      }));
+    } catch {
+      return [];
+    }
   }
 
   async publishPost(post: SocialPost): Promise<void> {
     const user = await this.getCurrentUser();
     if (!user) return;
-    await this.supabase.from('social_posts').insert({
+    await this.client.from('social_posts').insert({
       id: post.id,
       user_id: user.id,
       workout_title: post.workoutTitle,
@@ -154,7 +165,7 @@ class DatabaseService {
     if (!user) return defaultStats;
 
     const today = new Date().toISOString().split('T')[0];
-    const { data } = await this.supabase
+    const { data } = await this.client
       .from('daily_stats')
       .select('*')
       .eq('user_id', user.id)
@@ -177,7 +188,7 @@ class DatabaseService {
     if (!user) return;
     const today = new Date().toISOString().split('T')[0];
     
-    await this.supabase.from('daily_stats').upsert({
+    await this.client.from('daily_stats').upsert({
       user_id: user.id,
       date: today,
       calories_burned: stats.caloriesBurned,
@@ -188,12 +199,12 @@ class DatabaseService {
   }
 
   async getBlogArticles(): Promise<BlogArticle[]> {
-    const { data } = await this.supabase.from('blog_articles').select('*').order('date', { ascending: false });
+    const { data } = await this.client.from('blog_articles').select('*').order('date', { ascending: false });
     return data || [];
   }
 
   async getCoupons(): Promise<Coupon[]> {
-    const { data } = await this.supabase.from('coupons').select('*').eq('status', 'active');
+    const { data } = await this.client.from('coupons').select('*').eq('status', 'active');
     return data || [];
   }
 }
