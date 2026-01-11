@@ -11,7 +11,7 @@ interface BottomNavProps {
 
 const BottomNav: React.FC<BottomNavProps> = ({ activePage, onPageChange, onStartWorkout, primaryColor }) => {
   return (
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-48px)] max-w-md bg-black/40 backdrop-blur-3xl rounded-[35px] p-2 flex items-center justify-between border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] z-50">
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-[calc(100%-48px)] max-w-md bg-black/40 backdrop-blur-3xl rounded-[35px] p-2 flex items-center justify-between border border-white/10 shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] z-50 bottom-nav-container">
       <div className="flex flex-1 justify-around items-center">
         <button 
           onClick={() => onPageChange('home')}
