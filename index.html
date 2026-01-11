@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <title>ZFIT | Elite Workout Tracking</title>
     
-    <!-- PWA & Mobile Optimization -->
+    <!-- PWA & Mobile Optimization (Modern Standard) -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -29,19 +29,19 @@
             -webkit-tap-highlight-color: transparent;
         }
 
-        /* Animação de Pulso do Heart */
+        /* Animação de Pulso do Heart (Solicitada) */
         @keyframes heartPulse {
             0% { transform: scale(1); filter: brightness(1); }
-            40% { transform: scale(1.35); filter: brightness(1.4); }
-            60% { transform: scale(1.1); filter: brightness(1.2); }
-            80% { transform: scale(1.2); filter: brightness(1.3); }
-            100% { transform: scale(1.15); filter: brightness(1.25); }
+            15% { transform: scale(1.45); filter: brightness(1.5) drop-shadow(0 0 12px rgba(255,45,85,0.8)); }
+            30% { transform: scale(1.1); filter: brightness(1.2); }
+            45% { transform: scale(1.25); filter: brightness(1.3); }
+            100% { transform: scale(1.15); filter: brightness(1.2) drop-shadow(0 0 8px rgba(255,45,85,0.4)); }
         }
         .animate-heart-pulse {
             animation: heartPulse 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
 
-        /* Glassmorphism & Depth */
+        /* Outras animações e estilos */
         .premium-depth-dark {
             box-shadow: 
                 inset 0 1px 1px rgba(255, 255, 255, 0.07),
@@ -56,6 +56,8 @@
             to { opacity: 1; transform: translateY(0); }
         }
         .animate-reveal { animation: reveal 0.6s ease-out forwards; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 <script type="importmap">
 {
@@ -76,6 +78,5 @@
             <div style="width: 40px; height: 40px; border: 3px solid rgba(173,249,78,0.1); border-top-color: #adf94e; border-radius: 50%; animation: spin 1s linear infinite;"></div>
         </div>
     </div>
-    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
 </body>
 </html>

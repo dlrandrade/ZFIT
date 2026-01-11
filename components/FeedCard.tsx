@@ -63,7 +63,7 @@ const FeedCard: React.FC<FeedCardProps> = ({ post, primaryColor, onLike, theme, 
             <p className="text-[9px] font-black opacity-30 uppercase tracking-widest">{post.timestamp}</p>
           </div>
         </div>
-        <button onClick={handleShare} className="w-10 h-10 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center opacity-40 hover:opacity-100 transition-opacity">
+        <button onClick={handleShare} className="w-10 h-10 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center opacity-40 hover:opacity-100 transition-opacity">
           <Share2 size={16} />
         </button>
       </div>
@@ -84,7 +84,10 @@ const FeedCard: React.FC<FeedCardProps> = ({ post, primaryColor, onLike, theme, 
       {/* Action Area */}
       <div className="flex items-center space-x-6 px-8 py-5 bg-white/[0.01]">
         <button 
-          onClick={onLike}
+          onClick={(e) => {
+            e.stopPropagation();
+            onLike();
+          }}
           className="flex items-center space-x-2 group transition-all"
         >
           <div className="relative">
@@ -92,12 +95,12 @@ const FeedCard: React.FC<FeedCardProps> = ({ post, primaryColor, onLike, theme, 
               size={22} 
               className={`transition-all duration-500 ease-out ${
                 post.hasLiked 
-                  ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse drop-shadow-[0_0_8px_rgba(255,45,85,0.4)]' 
+                  ? 'fill-[#FF2D55] text-[#FF2D55] animate-heart-pulse' 
                   : 'text-white/30 hover:text-white'
               }`} 
             />
             {post.hasLiked && (
-              <div className="absolute inset-0 bg-[#FF2D55] blur-xl opacity-10 rounded-full animate-pulse" />
+              <div className="absolute inset-0 bg-[#FF2D55] blur-xl opacity-20 rounded-full animate-pulse" />
             )}
           </div>
           <span className={`text-xs font-black transition-colors ${post.hasLiked ? 'text-[#FF2D55]' : 'text-white/30'}`}>

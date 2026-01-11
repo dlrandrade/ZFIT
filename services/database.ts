@@ -2,22 +2,10 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { User, Workout, SocialPost, DailyStats, BlogArticle, Coupon } from '../types';
 
-// Acesso seguro às variáveis de ambiente
-const getEnv = (key: string, fallback: string) => {
-  try {
-    // @ts-ignore
-    if (typeof process !== 'undefined' && process.env && process.env[key]) {
-      // @ts-ignore
-      return process.env[key];
-    }
-    return fallback;
-  } catch {
-    return fallback;
-  }
-};
-
-const SUPABASE_URL = getEnv('VITE_SUPABASE_URL', 'https://jtbxdkoxwwnfnbclemmp.supabase.co');
-const SUPABASE_ANON_KEY = getEnv('VITE_SUPABASE_ANON_KEY', 'sb_publishable_89f07kq5B_i6ISCsldkJWQ_SPa2UFM_');
+// Em ambientes ESM puros, process.env causa erro de referência.
+// Usamos strings diretas para o cliente não quebrar no Vercel/Netlify.
+const SUPABASE_URL = 'https://jtbxdkoxwwnfnbclemmp.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_89f07kq5B_i6ISCsldkJWQ_SPa2UFM_';
 
 class DatabaseService {
   public supabase: SupabaseClient;

@@ -47,29 +47,35 @@ const App: React.FC = () => {
   
   const [calendarDays] = useState(getCalendarDays());
 
-  // Carregar dados do usuário logado de forma resiliente
   useEffect(() => {
+    console.log("ZFIT: Iniciando Aplicação...");
     const initApp = async () => {
       try {
         if (isAuthenticated) {
-          const currentUser = await db.getCurrentUser();
+          // Timeout de segurança para evitar spinner infinito em caso de rede instável
+          const authPromise = db.getCurrentUser();
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 8000));
+          
+          const currentUser = await Promise.race([authPromise, timeoutPromise]) as User | null;
+          
           if (currentUser) {
             setUser(currentUser);
           } else {
             setIsAuthenticated(false);
+            localStorage.removeItem('zfit_auth');
           }
         }
       } catch (e: any) {
-        console.error("Falha ao inicializar App:", e);
-        setInitError("Falha na conexão com o servidor. Verifique sua rede.");
+        console.warn("ZFIT: Falha na checagem de auth inicial:", e);
+        // Não barramos o app se falhar o login automático, apenas pedimos login novamente
+        if (isAuthenticated) setIsAuthenticated(false);
       } finally {
         setLoadingAuth(false);
       }
     };
     initApp();
-  }, [isAuthenticated]);
+  }, []);
 
-  // Carregamento de dados após confirmação de login
   useEffect(() => {
     const loadData = async () => {
       if (isAuthenticated && user) {
@@ -92,19 +98,18 @@ const App: React.FC = () => {
           const savedActive = localStorage.getItem('zfit_active_workout');
           if (savedActive) setActiveWorkout(JSON.parse(savedActive));
         } catch (e) {
-          console.warn("Alguns dados não puderam ser carregados:", e);
+          console.warn("ZFIT: Alguns dados não puderam ser carregados:", e);
         }
       }
     };
     loadData();
   }, [isAuthenticated, user]);
 
-  // Sincronização de efeitos (debounce implícito para não sobrecarregar o banco)
   useEffect(() => {
     if (isAuthenticated && user) {
       const timer = setTimeout(() => {
-        db.updateDailyStats(dailyStats).catch(console.warn);
-      }, 1000);
+        db.updateDailyStats(dailyStats).catch(() => {});
+      }, 2000);
       
       if (activeWorkout) localStorage.setItem('zfit_active_workout', JSON.stringify(activeWorkout));
       else localStorage.removeItem('zfit_active_workout');
@@ -112,9 +117,17 @@ const App: React.FC = () => {
       localStorage.setItem('zfit_user_routines', JSON.stringify(userRoutines));
       return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, dailyStats, activeWorkout, userRoutines, user]);
+  }, [isAuthenticated, dailyStats, activeWorkout, userRoutines]);
 
   const theme = THEMES[currentTheme];
+
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+        <div className="w-10 h-10 border-2 border-[#adf94e]/10 border-t-[#adf94e] rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   const handleLogout = async () => {
     await db.signOut();
@@ -127,32 +140,6 @@ const App: React.FC = () => {
     setUser(userData);
     setIsAuthenticated(true);
   };
-
-  if (loadingAuth) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex items-center justify-center">
-        <div className="w-12 h-12 border-4 border-[#adf94e]/20 border-t-[#adf94e] rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  if (initError) {
-    return (
-      <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-8 text-center space-y-6">
-        <AlertCircle size={48} className="text-red-500 opacity-50" />
-        <div className="space-y-2">
-          <h2 className="text-xl font-black uppercase">ERRO DE CARREGAMENTO</h2>
-          <p className="text-sm opacity-40 font-medium max-w-xs">{initError}</p>
-        </div>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-8 h-14 bg-white/5 rounded-2xl border border-white/10 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all"
-        >
-          Tentar Novamente
-        </button>
-      </div>
-    );
-  }
 
   if (!isAuthenticated) {
     return <Login onLogin={handleLoginSuccess} />;
@@ -211,7 +198,7 @@ const App: React.FC = () => {
         commentsCount: 0,
         hasLiked: false
       };
-      await db.publishPost(newPost).catch(console.warn);
+      await db.publishPost(newPost).catch(() => {});
       setSocialFeed(prev => [newPost, ...prev]);
 
       setActiveWorkout(null);
