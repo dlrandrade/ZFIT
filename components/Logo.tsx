@@ -1,9 +1,12 @@
 
 import React from 'react';
 
-export const ZFitLogo: React.FC<{ size?: number; color?: string }> = ({ size = 24, color = "#adf94e" }) => {
+export const ZFitLogo: React.FC<{ size?: number; color?: string; onClick?: () => void }> = ({ size = 24, color = "#adf94e", onClick }) => {
   return (
-    <div className="flex items-center gap-1.5 select-none">
+    <div 
+      className={`flex items-center gap-1.5 select-none ${onClick ? 'cursor-pointer active:scale-95 transition-transform' : ''}`}
+      onClick={onClick}
+    >
       <div 
         style={{ width: size + 8, height: size + 8 }} 
         className="bg-[#adf94e] rounded-lg flex items-center justify-center relative overflow-hidden"

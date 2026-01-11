@@ -16,7 +16,8 @@ import {
   Save,
   Crown,
   Sparkles,
-  RotateCcw
+  RotateCcw,
+  X
 } from 'lucide-react';
 import { Workout, User } from '../types';
 
@@ -30,7 +31,8 @@ interface ProfilePageProps {
 }
 
 const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogout, onUpdateUser, onOpenPricing }) => {
-  const [isEditingMetrics, setIsEditingMetrics] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [name, setName] = useState(user?.name || '');
   const [weight, setWeight] = useState(user?.weight?.toString() || '');
   const [height, setHeight] = useState(user?.height?.toString() || '');
 
@@ -44,23 +46,24 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
     { icon: <HelpCircle size={20} />, label: 'Suporte', subtitle: 'Centro de ajuda' },
   ];
 
-  const handleSaveMetrics = () => {
+  const handleSaveProfile = () => {
     if (!user) return;
     const newWeight = parseFloat(weight);
     const newHeight = parseFloat(height);
     
     const newHistory = [...(user.weightHistory || [])];
-    if (!isNaN(newWeight)) {
+    if (!isNaN(newWeight) && newWeight !== user.weight) {
       newHistory.push({ date: new Date().toISOString(), weight: newWeight });
     }
 
     onUpdateUser({
       ...user,
+      name: name || user.name,
       weight: !isNaN(newWeight) ? newWeight : user.weight,
       height: !isNaN(newHeight) ? newHeight : user.height,
       weightHistory: newHistory.slice(-10) 
     });
-    setIsEditingMetrics(false);
+    setIsEditing(false);
   };
 
   const resetPlan = () => {
@@ -78,8 +81,12 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
         <h2 className="text-4xl font-black tracking-tighter leading-[0.8] uppercase" style={{ color: theme.text }}>
           PERFIL DO<br/>USUÁRIO
         </h2>
-        <button className="w-12 h-12 rounded-2xl flex items-center justify-center border" style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border, color: theme.text }}>
-          <Settings size={22} />
+        <button 
+          onClick={() => isEditing ? setIsEditing(false) : setIsEditing(true)}
+          className="w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-95" 
+          style={{ backgroundColor: isEditing ? theme.primary : theme.cardSecondary, borderColor: theme.border, color: isEditing ? (theme.name === 'ZFIT Mint' ? '#FFF' : '#000') : theme.text }}
+        >
+          {isEditing ? <X size={22} /> : <Settings size={22} />}
         </button>
       </div>
 
@@ -101,7 +108,21 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
           </div>
         </div>
         
-        <h2 className="text-3xl font-black tracking-tighter uppercase mb-1" style={{ color: theme.text }}>{user?.name || 'Atleta'}</h2>
+        {isEditing ? (
+          <div className="w-full max-w-[240px] mb-4">
+             <span className="text-[8px] font-black uppercase opacity-20 block mb-1 text-center">Nome Público</span>
+             <input 
+               type="text" 
+               value={name} 
+               onChange={(e) => setName(e.target.value)}
+               className="bg-white/5 border border-white/10 rounded-xl w-full h-12 px-4 font-black text-center text-lg outline-none focus:border-primary uppercase tracking-tighter"
+               style={{ color: theme.text }}
+             />
+          </div>
+        ) : (
+          <h2 className="text-3xl font-black tracking-tighter uppercase mb-1" style={{ color: theme.text }}>{user?.name || 'Atleta'}</h2>
+        )}
+
         <div className="flex items-center space-x-2 px-4 py-1.5 rounded-full border" style={{ backgroundColor: theme.cardSecondary, borderColor: theme.border }}>
           <span className={`text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5 ${isElite ? 'text-[#adf94e]' : ''}`} style={{ color: isElite ? undefined : theme.primary }}>
             {isElite && <Sparkles size={10} />}
@@ -157,18 +178,29 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
                <Scale size={18} className="opacity-30" />
                <span className="text-[10px] font-black uppercase tracking-widest opacity-30">Bio-Métricas</span>
              </div>
-             <button 
-               onClick={() => isEditingMetrics ? handleSaveMetrics() : setIsEditingMetrics(true)}
-               className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"
-               style={{ color: theme.primary }}
-             >
-               {isEditingMetrics ? <><Save size={12} /> Salvar</> : <><TrendingUp size={12} /> Atualizar</>}
-             </button>
+             {isEditing && (
+               <button 
+                 onClick={handleSaveProfile}
+                 className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                 style={{ color: theme.primary }}
+               >
+                 <Save size={12} /> Salvar Tudo
+               </button>
+             )}
+             {!isEditing && (
+                <button 
+                  onClick={() => setIsEditing(true)}
+                  className="text-[9px] font-black uppercase tracking-widest flex items-center gap-1.5"
+                  style={{ color: theme.primary }}
+                >
+                  <TrendingUp size={12} /> Atualizar
+                </button>
+             )}
            </div>
            <div className="grid grid-cols-2 gap-4">
              <div className="space-y-1">
                <span className="text-[8px] font-black uppercase opacity-20 block">Peso</span>
-               {isEditingMetrics ? (
+               {isEditing ? (
                  <input 
                    type="number" 
                    value={weight} 
@@ -182,7 +214,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ theme, user, history, onLogou
              </div>
              <div className="space-y-1">
                <span className="text-[8px] font-black uppercase opacity-20 block">Altura</span>
-               {isEditingMetrics ? (
+               {isEditing ? (
                  <input 
                    type="number" 
                    value={height} 

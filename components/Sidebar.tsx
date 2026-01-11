@@ -33,7 +33,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onPageChange, onStartWork
       style={{ backgroundColor: theme.sidebar, borderColor: theme.border }}
     >
       <div className="mb-12">
-        <ZFitLogo color={theme.primary} />
+        <ZFitLogo color={theme.primary} onClick={() => onPageChange('home')} />
       </div>
 
       <nav className="flex-1 space-y-4">

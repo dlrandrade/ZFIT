@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ZFitLogo } from './Logo';
 import { User } from '../types';
 import { db } from '../services/database';
@@ -14,6 +14,34 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  
+  // Estado para capturar a altura real visível (ignora teclado)
+  const [viewportHeight, setViewportHeight] = useState(window.innerHeight);
+  const [isKeyboardOpen, setIsKeyboardOpen] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.visualViewport) {
+        setViewportHeight(window.visualViewport.height);
+        // Se a viewport diminuir consideravelmente, assumimos que o teclado está aberto
+        setIsKeyboardOpen(window.visualViewport.height < window.innerHeight * 0.8);
+      } else {
+        setViewportHeight(window.innerHeight);
+      }
+    };
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleResize);
+      window.visualViewport.addEventListener('scroll', handleResize);
+    }
+    
+    return () => {
+      if (window.visualViewport) {
+        window.visualViewport.removeEventListener('resize', handleResize);
+        window.visualViewport.removeEventListener('scroll', handleResize);
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,26 +68,31 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   };
 
   return (
-    <div className="fixed inset-0 h-[100dvh] bg-[#050505] text-white flex flex-col items-center justify-center p-6 overflow-hidden touch-none">
+    <div 
+      className="fixed inset-0 bg-[#050505] text-white flex flex-col items-center justify-center p-6 overflow-hidden touch-none select-none"
+      style={{ height: `${viewportHeight}px` }}
+    >
       {/* Background Decor */}
       <div className="absolute top-[-10%] right-[-10%] w-[600px] h-[600px] bg-[#adf94e] opacity-[0.05] blur-[150px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-10%] left-[-10%] w-[400px] h-[400px] bg-[#adf94e] opacity-[0.03] blur-[100px] rounded-full pointer-events-none" />
 
-      <div className="max-w-sm w-full space-y-6 md:space-y-8 relative z-10 animate-in fade-in zoom-in duration-700">
-        <div className="flex flex-col items-center text-center space-y-4 md:space-y-6">
-          <ZFitLogo size={32} />
-          <div className="space-y-1">
+      <div className={`max-w-sm w-full relative z-10 transition-all duration-500 flex flex-col ${isKeyboardOpen ? 'gap-4 justify-start pt-4' : 'gap-8 justify-center'}`}>
+        
+        {/* Logo e Título que encolhem se o teclado estiver aberto */}
+        <div className={`flex flex-col items-center text-center transition-all ${isKeyboardOpen ? 'scale-75 opacity-60' : 'scale-100 opacity-100'}`}>
+          <ZFitLogo size={isKeyboardOpen ? 24 : 32} />
+          <div className="mt-2">
             <h1 className="text-3xl md:text-4xl font-black tracking-tighter uppercase leading-[0.8]">
               {isSignUp ? 'FAÇA PARTE' : 'BEM-VINDO'}<br/>DA ELITE
             </h1>
-            <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-30">
+            <p className="text-[9px] font-black uppercase tracking-[0.3em] opacity-30 mt-2">
               {isSignUp ? 'Crie sua conta agora' : 'Identifique-se para entrar'}
             </p>
           </div>
         </div>
 
         {/* Tab Selector */}
-        <div className="flex bg-white/5 p-1 rounded-2xl border border-white/5">
+        <div className={`flex bg-white/5 p-1 rounded-2xl border border-white/5 transition-all ${isKeyboardOpen ? 'scale-90' : ''}`}>
           <button 
             type="button"
             onClick={() => { setIsSignUp(false); setError(null); }}
@@ -76,7 +109,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 w-full">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-2xl text-[9px] font-black uppercase text-center animate-shake">
               {error}
@@ -94,6 +127,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Seu Nome" 
+                  autoComplete="name"
                   className="w-full h-12 bg-white/5 rounded-[20px] border border-white/5 pl-14 pr-6 font-black uppercase text-[11px] tracking-widest focus:border-[#adf94e]/30 outline-none transition-all focus:bg-white/[0.08]"
                 />
               </div>
@@ -108,6 +142,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="Seu E-mail" 
+                autoComplete="email"
                 className="w-full h-12 bg-white/5 rounded-[20px] border border-white/5 pl-14 pr-6 font-black uppercase text-[11px] tracking-widest focus:border-[#adf94e]/30 outline-none transition-all focus:bg-white/[0.08]"
               />
             </div>
@@ -116,7 +151,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           <button 
             type="submit"
             disabled={loading}
-            className="w-full h-14 bg-[#adf94e] rounded-[22px] flex items-center justify-center space-x-3 active:scale-95 transition-all disabled:opacity-50 shadow-[0_10px_30px_rgba(173,249,78,0.2)]"
+            className={`w-full h-14 bg-[#adf94e] rounded-[22px] flex items-center justify-center space-x-3 active:scale-95 transition-all disabled:opacity-50 shadow-[0_10px_30px_rgba(173,249,78,0.2)] ${isKeyboardOpen ? 'h-12' : 'h-14'}`}
           >
             {loading ? (
               <Loader2 className="w-6 h-6 animate-spin text-black" />
@@ -131,12 +166,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           </button>
         </form>
 
-        <div className="text-center pt-2">
-          <p className="text-[8px] font-black uppercase tracking-widest opacity-20 leading-relaxed">
-            Seus dados são protegidos e sincronizados <br/>
-            pela infraestrutura ZFIT Cloud.
-          </p>
-        </div>
+        {!isKeyboardOpen && (
+          <div className="text-center pt-2 animate-in fade-in duration-700">
+            <p className="text-[8px] font-black uppercase tracking-widest opacity-20 leading-relaxed">
+              Seus dados são protegidos e sincronizados <br/>
+              pela infraestrutura ZFIT Cloud.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );

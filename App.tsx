@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Calendar from './components/Calendar';
@@ -339,7 +340,15 @@ const App: React.FC = () => {
       <div className="flex h-full">
         {!isFullscreenPage && <Sidebar activePage={currentPage as any} onPageChange={(p) => setCurrentPage(p as any)} onStartWorkout={handleStartWorkout} theme={theme} onLogout={handleLogout} isAdmin={user?.role === 'admin'} />}
         <div className={`flex-1 flex flex-col ${!isFullscreenPage ? 'lg:pl-72' : ''}`}>
-          {!isFullscreenPage && <Header onToggleTheme={() => setCurrentTheme(prev => prev === 'dark' ? 'mint' : 'dark')} isDark={currentTheme === 'dark'} user={user} />}
+          {!isFullscreenPage && (
+            <Header 
+              onToggleTheme={() => setCurrentTheme(prev => prev === 'dark' ? 'mint' : 'dark')} 
+              isDark={currentTheme === 'dark'} 
+              user={user} 
+              onLogoClick={() => setCurrentPage('home')}
+              onProfileClick={() => setCurrentPage('profile')}
+            />
+          )}
           <main className={`relative z-10 flex-1 ${!isFullscreenPage ? 'w-full pb-28 lg:pb-12' : ''}`}>
             {currentPage === 'executing' && activeWorkout ? <WorkoutExecution workout={activeWorkout} onUpdate={setActiveWorkout} onComplete={handleCompleteWorkout} onBack={() => setCurrentPage('home')} primaryColor={theme.primary} /> :
              currentPage === 'creating' ? <CreateWorkout onBack={() => setCurrentPage('home')} onStart={(exercises, title, saveAsRoutine) => {
