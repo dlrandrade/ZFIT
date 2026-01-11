@@ -1,0 +1,7 @@
+{
+  "name": "ZFIT",
+  "description": "A modern, high-performance workout tracking application designed for a seamless mobile experience with a bold neon aesthetic.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
